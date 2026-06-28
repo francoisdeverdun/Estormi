@@ -31,7 +31,10 @@ pub(super) fn render_qr_png(code: &str) -> Result<Vec<u8>> {
 fn sha256_hex(data: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(data);
-    format!("{:x}", h.finalize())
+    // sha2 0.11's digest output is a hybrid-array `Array`, which (unlike the
+    // old `GenericArray`) doesn't implement `LowerHex` — hex-encode the bytes
+    // ourselves. `sha256_hex_matches_known_vectors` pins the output format.
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// RFC 3339 (UTC) timestamp for a HistorySync message: the message's own Unix

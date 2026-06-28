@@ -78,15 +78,14 @@ pub(super) async fn run_axum(state: AppState) {
 /// (still-current) snapshot instead of re-copying the multi-MB DB each time —
 /// the response then carries `"throttled": true`.
 async fn handle_imessage_snapshot() -> Json<Value> {
-    let (flag, throttled) = match tokio::task::spawn_blocking(crate::imessage::snapshot_throttled)
-        .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("estormi: iMessage snapshot task failed: {e}");
-            ("0", false)
-        }
-    };
+    let (flag, throttled) =
+        match tokio::task::spawn_blocking(crate::imessage::snapshot_throttled).await {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("estormi: iMessage snapshot task failed: {e}");
+                ("0", false)
+            }
+        };
     let status = crate::imessage::snapshot_status(flag);
     Json(json!({ "status": status, "flag": flag, "throttled": throttled }))
 }

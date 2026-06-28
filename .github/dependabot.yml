@@ -49,6 +49,16 @@ updates:
       - dependencies
       - rust
     groups:
+      # The whatsapp-rust family (wacore + the client and its transport/http
+      # adapters) is version-coupled — the transport's TransportFactory impl is
+      # tied to a specific wacore, so a lone bump splits the tree and breaks the
+      # build (it did: transport→0.6 while the rest stayed 0.5). Bundle every
+      # family member, all update types, into ONE PR so they move together and a
+      # breaking 0.x bump is reviewed as a unit instead of auto-merged piecemeal.
+      whatsapp-rust:
+        patterns:
+          - "whatsapp-rust*"
+          - "wacore*"
       cargo-minor-patch:
         update-types:
           - minor
