@@ -16,7 +16,7 @@ catalog:
   "@testing-library/react": "^16.3.2"
   typescript: "^5.3.0"
   vitest: "^3.2.6"
-  happy-dom: "^20.9.0"
+  happy-dom: "^20.10.6"
 # Dev-only supply-chain hardening for the public repo. esbuild <0.25.0 carries
 # the dev-server request SSRF advisory (GHSA-67mh-4wv8-2f99). The tree is on
 # vite 6, whose esbuild dependency already resolves >=0.25, so this override is
