@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "estormi-server",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "--app-dir",
+        "packages",
+        "estormi_server.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8127",
+        "--log-level",
+        "warning"
+      ],
+      "port": 8127
+    },
+    {
+      "name": "web-ui",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@estormi/web-ui",
+        "dev",
+        "--port",
+        "5180",
+        "--strictPort"
+      ],
+      "port": 5180
+    }
+  ]
+}

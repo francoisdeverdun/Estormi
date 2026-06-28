@@ -1,0 +1,89 @@
+name: iOS
+
+# CI for the native SwiftUI companion at apps/estormi-ios/. The .xcodeproj is
+# gitignored (regenerated from project.yml), so every run must `xcodegen
+# generate` before building. iOS toolchain only exists on macOS runners.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/estormi-ios/**'
+      # The shared briefing stylesheet is referenced in place by project.yml
+      # (buildPhase: resources), so a change there can break the iOS build.
+      - 'packages/ui-kit/src/briefing.css'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'apps/estormi-ios/**'
+      - 'packages/ui-kit/src/briefing.css'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-build:
+    name: Build & test / iOS
+    # macos-14 ships a recent Xcode; xcode-select below pins the toolchain so
+    # the iOS SDK (project.yml targets iOS 26) and Simulator are available.
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # xcodegen is the repo's documented project generator
+      # (apps/estormi-ios/README.md: `brew install xcodegen`). It is preinstalled
+      # on GitHub macOS runners, but install it explicitly so the job is not
+      # coupled to the runner image's bundled formulae.
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      # The .xcodeproj is not committed — generate it from project.yml. The
+      # scheme produced is "Estormi" (the application target name).
+      - name: Generate Xcode project
+        working-directory: apps/estormi-ios
+        run: xcodegen generate
+
+      # Build the app for a generic iOS Simulator destination. A generic
+      # destination avoids pinning to a specific simulator/runtime that may not
+      # exist on a given runner image, keeping the job green across image bumps.
+      - name: Build app
+        working-directory: apps/estormi-ios
+        run: |
+          xcodebuild build \
+            -project Estormi.xcodeproj \
+            -scheme Estormi \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Unit tests (EstormiTests, e.g. Tests/VaultDecodingTests.swift) need a
+      # concrete booted simulator — `test` cannot run on a generic destination.
+      # Resolve the newest available iPhone simulator at runtime so we do not
+      # hardcode a device/runtime pair that may be missing on the runner.
+      - name: Resolve simulator destination
+        id: sim
+        run: |
+          # Pick the last available iPhone simulator across all installed iOS
+          # runtimes. jq ships on the GitHub macOS runner image.
+          UDID=$(xcrun simctl list devices available --json \
+            | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.isAvailable and (.name | test("iPhone"))) | .udid] | last // empty')
+          if [ -z "$UDID" ]; then
+            echo "No iOS simulator available on this runner" >&2
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        working-directory: apps/estormi-ios
+        run: |
+          xcodebuild test \
+            -project Estormi.xcodeproj \
+            -scheme Estormi \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO

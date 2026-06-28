@@ -1,0 +1,198 @@
+{
+  "delete_by_source": {
+    "required": [
+      "source"
+    ],
+    "properties": {
+      "source": {
+        "type": "string"
+      }
+    }
+  },
+  "delete_chunk": {
+    "required": [
+      "id"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    }
+  },
+  "fetch_around": {
+    "required": [
+      "date"
+    ],
+    "properties": {
+      "corpus": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "world"
+        ]
+      },
+      "date": {
+        "type": "string"
+      },
+      "forward_days": {
+        "type": "integer"
+      },
+      "limit": {
+        "type": "integer"
+      },
+      "sources": {
+        "type": "array"
+      },
+      "window_days": {
+        "type": "integer"
+      }
+    }
+  },
+  "get_chunk": {
+    "required": [
+      "id"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    }
+  },
+  "ingest_chunk": {
+    "required": [
+      "content_hash",
+      "source",
+      "text"
+    ],
+    "properties": {
+      "chat_id_raw": {
+        "type": "string"
+      },
+      "chat_name": {
+        "type": "string"
+      },
+      "content_hash": {
+        "type": "string"
+      },
+      "corpus": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "world"
+        ]
+      },
+      "date": {
+        "type": "string"
+      },
+      "end_date_ts": {
+        "type": "string"
+      },
+      "event_status": {
+        "type": "string"
+      },
+      "event_type": {
+        "type": "string"
+      },
+      "group_type": {
+        "type": "string"
+      },
+      "meta": {
+        "type": "object"
+      },
+      "pending_reply": {
+        "type": "boolean"
+      },
+      "source": {
+        "type": "string"
+      },
+      "source_id": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "working_location": {
+        "type": "string"
+      }
+    }
+  },
+  "search_memory": {
+    "required": [
+      "query"
+    ],
+    "properties": {
+      "after": {
+        "type": "string"
+      },
+      "before": {
+        "type": "string"
+      },
+      "chat_kind": {
+        "type": "string",
+        "enum": [
+          "dm",
+          "group",
+          "broadcast"
+        ]
+      },
+      "corpus": {
+        "type": "string",
+        "enum": [
+          "personal",
+          "world"
+        ]
+      },
+      "group_type": {
+        "type": "string",
+        "enum": [
+          "me",
+          "partner",
+          "work",
+          "family",
+          "couple",
+          "friends",
+          "organisation",
+          "charity",
+          "sport",
+          "noise",
+          "unknown"
+        ]
+      },
+      "limit": {
+        "type": "integer"
+      },
+      "min_score": {
+        "type": "number"
+      },
+      "pending_reply": {
+        "type": "boolean"
+      },
+      "query": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "documents",
+          "gcal",
+          "imessage",
+          "knowledge",
+          "mail",
+          "notes",
+          "reminders",
+          "whatsapp",
+          "whoop"
+        ]
+      },
+      "sources": {
+        "type": "array"
+      }
+    }
+  }
+}

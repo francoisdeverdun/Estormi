@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "estormi-briefing"
+version = "1.0.0"
+description = "Estormi Briefing engine: composes the daily briefing from the structured memory."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in estormi_server/requirements.txt (single
+# source of truth for the desktop bundle); intentionally not duplicated here.
+dependencies = []
+
+# Flat layout: the package directory IS the pyproject directory, so map the
+# `estormi_briefing` import name to `.`. Subpackages listed explicitly.
+[tool.setuptools]
+packages = [
+    "estormi_briefing",
+    "estormi_briefing.compose",
+    "estormi_briefing.day",
+    "estormi_briefing.io",
+    "estormi_briefing.lint",
+    "estormi_briefing.llm",
+]
+
+[tool.setuptools.package-dir]
+estormi_briefing = "."

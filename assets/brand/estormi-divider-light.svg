@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 28" role="img" aria-labelledby="title desc">
+  <title id="title">Estormi divider</title>
+  <desc id="desc">The illuminated rule, tuned for light surfaces: a deep-gold hairline fading at both ends, outboard lozenges with a faint pip, flanking quatrefoils, and a centred burgundy lozenge in a gold frame — the same ornament as the in-app masthead rule.</desc>
+  <defs>
+    <!-- userSpaceOnUse so the gradient survives on a zero-height <line>: strict
+         rasterizers (GitHub's README renderer) drop an objectBoundingBox
+         gradient when the bounding box has zero area. -->
+    <linearGradient id="fadeL" x1="6" y1="0" x2="150" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8A6A30" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#8A6A30" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="fadeR" x1="270" y1="0" x2="414" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8A6A30" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#8A6A30" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Fading hairlines, leaving the centre cluster clear -->
+  <line x1="6" y1="14" x2="150" y2="14" stroke="url(#fadeL)" stroke-width="1"/>
+  <line x1="270" y1="14" x2="414" y2="14" stroke="url(#fadeR)" stroke-width="1"/>
+  <!-- Outboard lozenges (centre ± 48) with a faint pip beyond -->
+  <path d="M162 12l2 2-2 2-2-2z" fill="#8A6A30"/>
+  <circle cx="156" cy="14" r="0.9" fill="#8A6A30" opacity="0.8"/>
+  <path d="M258 12l2 2-2 2-2-2z" fill="#8A6A30"/>
+  <circle cx="264" cy="14" r="0.9" fill="#8A6A30" opacity="0.8"/>
+  <!-- Quatrefoils flanking the centre (centre ± 18): four gold petals + burgundy heart -->
+  <g fill="#9A7838">
+    <circle cx="192" cy="11.45" r="1.7"/><circle cx="194.55" cy="14" r="1.7"/>
+    <circle cx="192" cy="16.55" r="1.7"/><circle cx="189.45" cy="14" r="1.7"/>
+  </g>
+  <circle cx="192" cy="14" r="1.45" fill="#6e1f2e"/>
+  <g fill="#9A7838">
+    <circle cx="228" cy="11.45" r="1.7"/><circle cx="230.55" cy="14" r="1.7"/>
+    <circle cx="228" cy="16.55" r="1.7"/><circle cx="225.45" cy="14" r="1.7"/>
+  </g>
+  <circle cx="228" cy="14" r="1.45" fill="#6e1f2e"/>
+  <!-- Centre: burgundy lozenge in a thin gold frame, deep gold heart -->
+  <path d="M210 8.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#6e1f2e" stroke="#8A6A30" stroke-width="0.9"/>
+  <circle cx="210" cy="14" r="1.1" fill="#8A6A30"/>
+</svg>

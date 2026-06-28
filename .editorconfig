@@ -1,0 +1,32 @@
+# EditorConfig — one codified indent/charset/EOL policy across the four-language
+# tree (Python, TypeScript/JS, Rust, Swift). https://editorconfig.org
+# Indent widths below match the existing sources, so this guides editors without
+# reformatting anything: Python/Rust/Swift 4-space, JS/TS/JSON/YAML 2-space,
+# Makefile hard tabs.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{js,jsx,ts,tsx,mjs,cjs,json,css,scss,html,yml,yaml}]
+indent_size = 2
+
+[*.{py,rs,swift}]
+indent_size = 4
+
+# Makefiles are tab-significant — a space-indented recipe line is a hard error.
+[Makefile]
+indent_style = tab
+
+[*.mk]
+indent_style = tab
+
+# Markdown uses trailing whitespace (two spaces) for hard line breaks; don't
+# strip it.
+[*.md]
+trim_trailing_whitespace = false

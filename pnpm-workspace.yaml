@@ -1,0 +1,29 @@
+# Explicit JS members only. `packages/` also holds the six first-party Python
+# packages (estormi_server, memory_core, …) — not pnpm packages — so list the
+# real JS workspaces explicitly rather than globbing `packages/*`.
+packages:
+  - "packages/ui-kit"
+  - "packages/web-ui"
+# Single source for the versions shared by the two JS workspaces (web-ui +
+# ui-kit). Both reference these as `catalog:` so React / TypeScript / vitest
+# can never drift between the design system and the SPA — the repo has been
+# bitten by a stale ui-kit before. pnpm 9.5+ feature.
+catalog:
+  react: "^18.3.1"
+  react-dom: "^18.3.1"
+  "@types/react": "^18.2.0"
+  "@types/react-dom": "^18.2.0"
+  "@testing-library/react": "^16.3.2"
+  typescript: "^5.3.0"
+  vitest: "^3.2.6"
+  happy-dom: "^20.9.0"
+# Dev-only supply-chain hardening for the public repo. esbuild <0.25.0 carries
+# the dev-server request SSRF advisory (GHSA-67mh-4wv8-2f99). The tree is on
+# vite 6, whose esbuild dependency already resolves >=0.25, so this override is
+# now a defensive floor: it keeps any transitive resolution from sliding back
+# below the patched line. (pnpm 10/11 reads overrides here, not the
+# package.json `pnpm` field.)
+overrides:
+  esbuild: ">=0.25.0"
+allowBuilds:
+  esbuild: true

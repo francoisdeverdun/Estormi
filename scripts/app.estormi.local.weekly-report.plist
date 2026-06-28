@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>app.estormi.local.weekly-report</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- Non-login shell: launchd already provides the env (see
+         EnvironmentVariables below). -->
+    <string>-c</string>
+    <string>cd "__REPO_ROOT__" &amp;&amp; exec scripts/weekly_report.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>20</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- launchd does NOT expand env vars in plist paths. The `__HOME__` and
+       `__REPO_ROOT__` placeholders are substituted by `make install-agents`
+       at install time (sed -e "s|__HOME__|$$HOME|g" -e
+       "s|__REPO_ROOT__|<repo>|g"), so the installed copy under
+       ~/Library/LaunchAgents has the absolute paths. -->
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/Estormi/estormi-weekly-report.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/Estormi/estormi-weekly-report-error.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

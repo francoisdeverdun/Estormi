@@ -1,0 +1,29 @@
+# Normalize line endings on commit across the polyglot tree: store text as LF in
+# the repo, check out native. Keeps a CRLF from a Windows editor (or a tool) out
+# of history and makes diffs stable regardless of contributor platform.
+* text=auto eol=lf
+
+# Generated lockfiles + machine-emitted specs: huge, machine-owned, and reviewed
+# as facts rather than read line-by-line. Marking them linguist-generated keeps
+# them out of GitHub's language bar and collapses them in diffs/reviews; -diff
+# suppresses the noisy textual diff while still tracking the file.
+pnpm-lock.yaml          linguist-generated=true -diff
+requirements.lock       linguist-generated=true -diff
+apps/estormi-macos/Cargo.lock  linguist-generated=true -diff
+
+# Canonical OpenAPI spec + its generated TS client types are emitted by
+# scripts/gen_openapi.py / `make openapi` and verified current by a contract
+# test — derived output, not hand-authored source.
+docs/specs/openapi.json                linguist-generated=true
+packages/web-ui/src/api/schema.d.ts    linguist-generated=true
+
+# Binary assets: never line-ending-normalized, never textually diffed.
+*.png   binary
+*.icns  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.m4a   binary
+*.gguf  binary

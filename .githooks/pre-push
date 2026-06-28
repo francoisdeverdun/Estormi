@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Block direct pushes to the protected `main` branch.
+#
+# Estormi's hard rule (CLAUDE.md → "Branch discipline"): changes reach `main`
+# only through a reviewed pull request. This hook is the LOCAL backstop for the
+# GitHub server-side protection applied by scripts/setup_branch_protection.sh —
+# it stops an accidental or automated `git push <remote> main` before it ever
+# leaves the machine.
+#
+# Deliberate maintainer release push:
+#   ESTORMI_ALLOW_MAIN_PUSH=1 git push origin main
+#
+# Active via `git config core.hooksPath .githooks`
+# (set by scripts/setup-graphify-skill.sh; the pre-commit hook documents it).
+
+set -euo pipefail
+
+protected="refs/heads/main"
+
+# Maintainer escape hatch for an intentional release push.
+if [ "${ESTORMI_ALLOW_MAIN_PUSH:-0}" = "1" ]; then
+    exit 0
+fi
+
+# git feeds pre-push one line per ref on stdin:
+#   <local ref> <local sha> <remote ref> <remote sha>
+blocked=0
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    if [ "$remote_ref" = "$protected" ]; then
+        blocked=1
+    fi
+done
+
+if [ "$blocked" = "1" ]; then
+    echo "✋ Direct push to main is blocked (Estormi branch rule)." >&2
+    echo "   Land changes through a PR from a feature branch instead." >&2
+    echo "   Maintainer override: ESTORMI_ALLOW_MAIN_PUSH=1 git push …" >&2
+    exit 1
+fi
+
+exit 0

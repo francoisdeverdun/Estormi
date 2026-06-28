@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Do NOT set LSUIElement here. LSUIElement=true would *permanently* hide
+    Estormi from Launchpad, the Dock, and the Cmd-Tab switcher. Instead the app
+    sets its activation policy at runtime (main.rs): the default is Accessory
+    (menu-bar / tray app, dock icon hidden), and the tray's "Hide Dock Icon"
+    toggle flips it to Regular so the Dock icon can appear. Keeping LSUIElement
+    unset is what makes that runtime toggle possible.
+    See tests/tooling/test_app_bundle.py for the regression test.
+  -->
+  <key>NSHumanReadableCopyright</key>
+  <string>© 2026 Estormi contributors</string>
+  <key>NSRemindersUsageDescription</key>
+  <string>Estormi needs access to Reminders to ingest your tasks into your personal memory.</string>
+  <key>NSContactsUsageDescription</key>
+  <string>Estormi reads your Contacts to label WhatsApp chats with the names of the people you message, instead of raw phone numbers.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Estormi drives Calendar, Notes and Mail via AppleScript to export their content into your local memory.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Estormi reads your events to include them in your daily briefings.</string>
+</dict>
+</plist>

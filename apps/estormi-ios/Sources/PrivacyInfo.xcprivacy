@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Apple privacy manifest (required for App Store submission since the 2024
+     "required reason API" deadline). XcodeGen bundles this from Sources/ into
+     the .app root on `xcodegen generate`.
+
+     This app collects NO data in Apple's sense: every byte that leaves the
+     device goes to the user's OWN iCloud account (the iCloud Drive vault folder
+     and the CloudKit *private* database used only as a notification doorbell)
+     or to the user's own Mac via that folder — nothing reaches the developer.
+     There is no analytics, no tracking, no IDFA/AdSupport, and no general
+     networking (the briefing renders local HTML with baseURL:nil; there is no
+     URLSession in the app). Hence NSPrivacyTracking=false and the collected-data
+     and tracking-domains arrays are empty.
+
+     Two "required reason" API categories ARE used and are declared below:
+       • UserDefaults (CA92.1) — vault bookmark, notification flags, last APNs
+         token, audio playback-speed preference; all this-app-only values.
+       • File timestamp (0A2A.1) — VaultReader stamps and reads the modification
+         date of the narration .m4a copy it creates inside the app's own
+         temporaryDirectory (app-container metadata only; never displayed). -->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>0A2A.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

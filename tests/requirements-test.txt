@@ -1,0 +1,20 @@
+# Test dependencies — install with: pip install -r tests/requirements-test.txt
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-cov>=5.0
+pytest-timeout>=2.3
+aiosqlite>=0.20.0
+httpx>=0.27.0
+# Executable layering contracts (tests/contract/test_import_linter_layers.py)
+import-linter>=2.1
+# Static type checking (`make typecheck`, CI "Python typecheck" job). Pinned
+# exactly: pyright tightens inference between releases, so an unpinned bump can
+# turn CI red with no code change. Config in pyproject.toml [tool.pyright].
+pyright==1.1.410
+# Lint + format (`make lint`, CI lint job). Pinned exactly for the same reason
+# as pyright: with CI billing off, `make check` is the sole gate, so the ruff it
+# runs (.venv/bin/ruff) MUST equal the CI/pre-commit pin or a 0.15.x format
+# tweak silently diverges them. Keep this == the .pre-commit-config.yaml rev and
+# the `pip install ruff==` lines in .github/workflows/*.yml (asserted by
+# tests/contract/test_quality_contracts.py).
+ruff==0.15.16
