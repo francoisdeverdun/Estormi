@@ -28,6 +28,17 @@ PERSONAL_MARKERS = [
 _OWNER_HANDLE = "fran" + "cois" + "de" + "ver" + "dun"
 OWNER_URL_ALLOWLIST = re.compile(r"https://github\.com/" + _OWNER_HANDLE, re.IGNORECASE)
 
+# shields.io renders the repo's public badges (the README "Download for macOS"
+# release badge, docs/release.md) straight from the canonical
+# ``img.shields.io/github/<metric>/<owner>/<repo>`` path, so the owner handle
+# there is the same public location as the github.com URL above — not a leak.
+# Allow it *only* inside a shields.io GitHub badge path that ends in the exact
+# ``<handle>/Estormi``; the handle anywhere else still trips the markers.
+OWNER_BADGE_ALLOWLIST = re.compile(
+    r"img\.shields\.io/github/[^\s\"')]*?" + _OWNER_HANDLE + r"/Estormi",
+    re.IGNORECASE,
+)
+
 # Git-history author/committer email allowlist (used by --history mode). Every
 # commit's author and committer email must reduce to one of these, or the
 # history carries a corporate-style identity leak. The literals are split the
@@ -227,10 +238,11 @@ def _scan_content(path: Path, text: str) -> list[str]:
 
     for lineno, line in enumerate(text.splitlines(), start=1):
         if any(pattern.search(line) for pattern in PERSONAL_MARKERS):
-            # Drop the allow-listed owner GitHub URL, then re-check: a marker
-            # that survives the scrub is a genuine leak; one that doesn't was
-            # only the canonical public repo URL.
+            # Drop the allow-listed owner GitHub URL and shields.io badge, then
+            # re-check: a marker that survives the scrub is a genuine leak; one
+            # that doesn't was only the canonical public repo URL / badge.
             scrubbed = OWNER_URL_ALLOWLIST.sub("", line)
+            scrubbed = OWNER_BADGE_ALLOWLIST.sub("", scrubbed)
             if any(pattern.search(scrubbed) for pattern in PERSONAL_MARKERS):
                 findings.append(f"{rel}:{lineno}: personal marker found")
         for pattern in (PHONE_FR_MOBILE, PHONE_FR_WA):
