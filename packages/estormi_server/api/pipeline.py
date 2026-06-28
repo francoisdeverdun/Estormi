@@ -206,17 +206,20 @@ async def api_pipeline_stage_log(
         elif not path:
             return JSONResponse({"error": "path, engine or source required"}, status_code=400)
 
+        # Resolve to an absolute, symlink-free path, then confirm it is
+        # *contained* within an allowed root before any filesystem access.
+        # ``is_relative_to`` is the proper containment test (no string-prefix
+        # edge cases like ``/data/logs-evil`` matching ``/data/logs``): the
+        # tail is only ever read from the data ``logs/`` dir, or from ``/tmp``
+        # for an ``estormi-``prefixed scratch log.
         log_path = Path(path).resolve()
-        path_str = str(log_path)
+        data_logs = (Path(DATA_DIR) / "logs").resolve()
+        tmp_root = Path("/tmp").resolve()
 
-        data_logs = str((Path(DATA_DIR) / "logs").resolve())
-        in_data_logs = path_str.startswith(data_logs + "/")
+        in_data_logs = log_path.is_relative_to(data_logs)
+        in_tmp = log_path.is_relative_to(tmp_root) and log_path.name.startswith("estormi-")
 
-        tmp_resolved = str(Path("/tmp").resolve())
-        in_tmp = path_str.startswith(tmp_resolved + "/")
-        name_ok = log_path.name.startswith("estormi-")
-
-        if not (in_data_logs or (in_tmp and name_ok)):
+        if not (in_data_logs or in_tmp):
             return JSONResponse({"error": "path not allowed"}, status_code=403)
         if not log_path.exists():
             return JSONResponse({"error": "log not found"}, status_code=404)

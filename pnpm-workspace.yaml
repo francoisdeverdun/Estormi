@@ -17,13 +17,20 @@ catalog:
   typescript: "^6.0.3"
   vitest: "^3.2.6"
   happy-dom: "^20.9.0"
-# Dev-only supply-chain hardening for the public repo. esbuild <0.25.0 carries
-# the dev-server request SSRF advisory (GHSA-67mh-4wv8-2f99). The tree is on
-# vite 6, whose esbuild dependency already resolves >=0.25, so this override is
-# now a defensive floor: it keeps any transitive resolution from sliding back
-# below the patched line. (pnpm 10/11 reads overrides here, not the
-# package.json `pnpm` field.)
+# Supply-chain hardening for the public repo: pin transitive deps up to their
+# patched release (Dependabot alerts). Each `<x` form only rewrites resolutions
+# below the patched line, staying within the dependency's current major so
+# nothing breaks; drop an entry once every dependent's own range has moved past
+# it. (pnpm 10/11 reads overrides here, not the package.json `pnpm` field.)
+#   - esbuild <0.25.0  — dev-server request SSRF (GHSA-67mh-4wv8-2f99); vite 6
+#     already resolves >=0.25, so this is now a defensive floor.
+#   - ws <8.21.0       — memory-exhaustion DoS from tiny fragments (high).
+#   - js-yaml <4.2.0   — quadratic-complexity DoS in merge-key handling.
+#   - @babel/core <7.29.6 — arbitrary file read via sourceMappingURL comment.
 overrides:
   esbuild: ">=0.25.0"
+  "ws@<8.21.0": ">=8.21.0"
+  "js-yaml@<4.2.0": ">=4.2.0"
+  "@babel/core@<7.29.6": ">=7.29.6 <8"
 allowBuilds:
   esbuild: true

@@ -105,8 +105,13 @@ async def reset_source_data(name: str, request: Request):
     # Wiping the raw log (which forces a rescan) is the separate, heavier action
     # `POST /api/sources/whatsapp/log/reset`.
     if name != "whatsapp":
-        staging = Path(DATA_DIR) / "staging" / name
-        if staging.exists():
+        staging_root = (Path(DATA_DIR) / "staging").resolve()
+        staging = (staging_root / name).resolve()
+        # Defence in depth: `name` is already slug-validated above (the pattern
+        # admits no path separators), but confirm the resolved target stays
+        # strictly inside the staging root before removing it — so any future
+        # loosening of the slug rule can't turn this into a traversal.
+        if staging.is_relative_to(staging_root) and staging != staging_root and staging.exists():
             shutil.rmtree(staging, ignore_errors=True)
 
     # 4) Per-source dag_stages history — the IngestionPage's "Last 14 runs"

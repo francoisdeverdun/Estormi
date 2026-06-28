@@ -7,6 +7,7 @@ import sys
 import types
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -724,9 +725,7 @@ def test_rss_fetch_public_follows_redirect_to_public_target(monkeypatch):
     monkeypatch.setattr(
         knowledge_fetch,
         "_rss_url_is_public",
-        lambda url: (
-            url.startswith("http://feed.public.test") or url.startswith("http://mirror.public.test")
-        ),
+        lambda url: urlsplit(url).hostname in {"feed.public.test", "mirror.public.test"},
     )
 
     result = knowledge_fetch._rss_fetch_public("http://feed.public.test/rss")

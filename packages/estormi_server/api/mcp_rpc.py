@@ -446,8 +446,11 @@ async def mcp_rpc(
             # fault, not an internal fault: map it to -32602 and skip the ERROR
             # traceback the genuine-fault path below logs.
             log.info("tool.invalid_params", tool=name, error=str(exc))
-            detail = str(exc) or exc.__class__.__name__
-            return _rpc_error(rpc.id, -32602, f"Invalid params: {detail}")
+            # Don't echo the raw exception text — a ValueError/TypeError message
+            # can carry internal state (paths, SQL fragments). The detail is in
+            # the structured log above for operators; the client gets a static
+            # params-fault marker, mirroring the generic-fault path below.
+            return _rpc_error(rpc.id, -32602, "Invalid params (see server logs)")
         except Exception:
             log.exception("tool.error", tool=name)
             # Do not echo the raw exception (it can contain absolute paths,
