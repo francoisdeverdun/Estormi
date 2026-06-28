@@ -46,7 +46,14 @@ jobs:
         # invocation below runs from apps/estormi-macos/ and overrides it).
         working-directory: apps/estormi-macos
         run: |
-          rustup toolchain install --profile minimal --component clippy,rustfmt
+          # `rustup show` activates (and installs) the pinned nightly from
+          # rust-toolchain.toml, including its declared rustfmt/clippy
+          # components. `component add` is an idempotent belt-and-suspenders that
+          # also installs them on an already-cached toolchain — a bare
+          # `toolchain install --component …` no-ops there, which used to leave
+          # `cargo fmt` with no rustfmt.
+          rustup show active-toolchain
+          rustup component add rustfmt clippy
           rustup show active-toolchain
 
       - name: Cache cargo-audit binary

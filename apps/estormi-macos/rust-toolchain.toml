@@ -8,3 +8,10 @@
 # today can break tomorrow on an unrelated compiler change. Bump deliberately.
 [toolchain]
 channel = "nightly-2026-05-01"
+# Declare the components the CI lint steps need (cargo fmt / clippy) so rustup
+# installs them whenever it activates this toolchain in apps/estormi-macos/.
+# `--profile minimal` omits them, and a bare `rustup toolchain install
+# --component …` silently no-ops once the toolchain is already installed, which
+# left `cargo fmt` with no rustfmt. Both components are published for this
+# nightly (x86_64/aarch64).
+components = ["rustfmt", "clippy"]
