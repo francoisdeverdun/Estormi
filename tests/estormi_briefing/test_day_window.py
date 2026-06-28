@@ -166,27 +166,34 @@ async def test_fetch_recent_whatsapp_filters_by_recency_and_group():
 
 async def test_fetch_recent_whatsapp_caps_and_sorts_newest_first():
     """Output is newest-first and capped at _WA_RECENT_MAX_CHUNKS."""
-    now = datetime.now(timezone.utc)
     cap = day_context._WA_RECENT_MAX_CHUNKS
+    today = datetime.now().astimezone().date()
+    # Anchor the synthetic chats to the briefing day's *end* (the window's upper
+    # bound), NOT wall-clock now(). The recency window is [day_end − hours,
+    # day_end] measured in the briefing-local tz, and day_end rejects
+    # future-dated chats. A now()-anchored chat falls *after* day_end whenever
+    # UTC wall-clock has already passed the local day's end — e.g. a UTC runner
+    # in the last hours of the day with a UTC-ahead briefing tz — which silently
+    # dropped every chunk and made this test time-of-day/timezone flaky.
+    _, before = day_context._utc_bounds_for_local_day(today)
+    end_dt = day_context._parse_iso_datetime(before)
+    assert end_dt is not None
 
     async def _fake(payload, timeout=12.0):
-        # cap + 5 chunks, each a minute apart, all recent and in an actionable group
+        # cap + 5 chunks, each a minute apart, all inside the window and in an
+        # actionable group. msg 0 is the newest (closest to day_end).
         return [
             {
                 "source": "whatsapp",
                 "text": f"msg {i}",
                 "group_type": "friends",
-                "date_ts": (now - timedelta(minutes=i)).isoformat(),
+                "date_ts": (end_dt - timedelta(minutes=i + 1)).isoformat(),
             }
             for i in range(cap + 5)
         ]
 
     with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
-        # now-relative chunks → run against today so they fall inside the
-        # [cutoff, day-end] recency window. The upper bound (day-end) rejects
-        # future-dated chats on a rebuilt past day, so a past briefing date here
-        # would correctly drop them all.
-        out = await day_context._fetch_recent_whatsapp(datetime.now().astimezone().date())
+        out = await day_context._fetch_recent_whatsapp(today)
 
     assert len(out) == cap
     assert out[0]["text"] == "msg 0"  # newest first
