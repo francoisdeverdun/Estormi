@@ -30,7 +30,7 @@ llama-cpp-python>=0.3.28
 # the Voxtral tekken tokenizer. Bundle pins the exact versions.
 mlx-audio>=0.4.4
 soundfile>=0.14.0
-mistral-common[audio]>=1.11.0
+mistral-common[audio]>=1.11.5
 keyring>=25.0.0
 # APNs JWT (ES256) signing for the iOS "new briefing" push — see
 # estormi_ingestion/shared/delivery/apns_push.py. Bundle pins the exact version.
