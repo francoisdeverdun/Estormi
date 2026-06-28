@@ -30,7 +30,7 @@ anyhow = "1"
 whatsapp-rust = { version = "0.5.0", features = ["sqlite-storage"] }
 whatsapp-rust-tokio-transport = "0.5.0"
 whatsapp-rust-ureq-http-client = "0.5.0"
-wacore = "0.5"
+wacore = "0.6"
 axum = { version = "0.7", features = ["json"] }
 qrcode = "0.14"
 image = { version = "0.25", default-features = false, features = ["png"] }
