@@ -113,7 +113,7 @@ jobs:
       # as `make bundle` does locally via its `frontend-build` target. Without this
       # the build fails on the missing frontendDist directory on a fresh checkout.
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
