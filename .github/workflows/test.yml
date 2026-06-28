@@ -154,7 +154,7 @@ jobs:
       # HF hub cache, across runs. Keys on requirements/requirements.lock so a fastembed
       # bump refreshes the models.
       - name: Cache embedding models
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/fastembed
@@ -277,7 +277,7 @@ jobs:
       # from Hugging Face on first use) and pin its path, otherwise the seed
       # steps fail and every downstream search check fails with them.
       - name: Cache embedding models
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/fastembed
