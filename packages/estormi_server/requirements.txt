@@ -7,7 +7,7 @@ fastapi>=0.111.0
 # fastapi) so neither a dev install nor the lock can resolve a vulnerable build.
 starlette>=1.3.1
 uvicorn[standard]>=0.30.0
-httpx>=0.27.0
+httpx>=0.28.1
 qdrant-client[local]>=1.11.0
 fastembed>=0.8.0
 aiosqlite>=0.20.0
