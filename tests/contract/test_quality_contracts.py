@@ -164,7 +164,7 @@ class TestPipelineContracts:
             "actions/checkout@v6",
             "actions/setup-python@v6",
             "actions/upload-artifact@v7",
-            "actions/cache@v5",
+            "actions/cache@v6",
         ]:
             assert required in combined
 
@@ -173,5 +173,6 @@ class TestPipelineContracts:
             "actions/setup-python@v5",
             "actions/upload-artifact@v4",
             "actions/cache@v4",
+            "actions/cache@v5",
         ]:
             assert deprecated not in combined
