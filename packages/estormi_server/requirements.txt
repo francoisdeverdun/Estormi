@@ -19,7 +19,7 @@ pydantic>=2.7.0
 python-dotenv>=1.0.0
 structlog>=24.1.0
 sse-starlette>=2.1.0
-pyyaml>=6.0
+pyyaml>=6.0.3
 # ≥ 0.3.28: the Gemma 4 12B catalog tier needs a vendored llama.cpp that
 # knows the gemma4 arch — 0.3.28 is the version it's validated on, and
 # matches the requirements-bundle.txt pin.
