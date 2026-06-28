@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 578 250" role="img" aria-labelledby="title desc">
+  <title id="title">Estormi — Ars Memoriae</title>
+  <desc id="desc">The burgundy illuminated E mark beside the STORMI wordmark, the garlanded Ars Memoriae tagline, and an illuminated rule — centred, matching the in-app masthead.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE9B8"/>
+      <stop offset="40%" stop-color="#DCBA8A"/>
+      <stop offset="75%" stop-color="#C8A96B"/>
+      <stop offset="100%" stop-color="#8A6A30"/>
+    </linearGradient>
+    <linearGradient id="fadeL" x1="34" y1="0" x2="184" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8a96b" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#c8a96b" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="fadeR" x1="394" y1="0" x2="544" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c8a96b" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#c8a96b" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark ink ground -->
+  <rect width="578" height="250" fill="#1a1f29"/>
+
+  <!-- Row 1: the blocked illuminated E mark + STORMI wordmark, centred together.
+       Mark spans 60–170 (110²); wordmark glyphs span ~190–517; the pair centres
+       on x=289, which is the viewBox centre. -->
+  <g transform="translate(60 44)">
+    <rect x="0" y="0" width="110" height="110" rx="22" ry="22" fill="#6E1F2E"/>
+    <rect x="8.5" y="8.5" width="93" height="93" rx="16.5" ry="16.5"
+          fill="none" stroke="url(#gold)" stroke-width="6"/>
+    <text x="55" y="55.5" text-anchor="middle" dominant-baseline="central"
+          font-family="Cinzel, Georgia, serif" font-weight="700" font-size="66"
+          fill="url(#gold)" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"
+          style="paint-order:stroke fill">E</text>
+  </g>
+  <text x="188" y="123" font-family="Cinzel, 'Trajan Pro', Georgia, serif" font-weight="700"
+        font-size="68" fill="#FAF8F4" letter-spacing="6">STORMI</text>
+
+  <!-- Row 2: garlanded ARS MEMORIAE, centred on the lockup axis (x=289). -->
+  <g fill="#8A7142" transform="translate(128 188)">
+    <circle cx="0" cy="-3.5" r="2"/><circle cx="3.5" cy="0" r="2"/>
+    <circle cx="0" cy="3.5" r="2"/><circle cx="-3.5" cy="0" r="2"/>
+    <circle cx="0" cy="0" r="1.7"/>
+  </g>
+  <text x="289" y="194" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="700"
+        font-size="22" fill="#DCBA8A" letter-spacing="9">ARS MEMORIAE</text>
+  <g fill="#8A7142" transform="translate(450 188)">
+    <circle cx="0" cy="-3.5" r="2"/><circle cx="3.5" cy="0" r="2"/>
+    <circle cx="0" cy="3.5" r="2"/><circle cx="-3.5" cy="0" r="2"/>
+    <circle cx="0" cy="0" r="1.7"/>
+  </g>
+
+  <!-- Row 3: the illuminated rule, centred under the wordmark (axis x=289, y=222). -->
+  <g transform="translate(0 222)">
+    <line x1="34" y1="0" x2="184" y2="0" stroke="url(#fadeL)" stroke-width="1"/>
+    <line x1="394" y1="0" x2="544" y2="0" stroke="url(#fadeR)" stroke-width="1"/>
+    <!-- Outboard lozenges (axis ± 48) with a faint pip beyond -->
+    <path d="M241 -2l2 2-2 2-2-2z" fill="#c8a96b"/>
+    <circle cx="235" cy="0" r="0.9" fill="#c8a96b" opacity="0.7"/>
+    <path d="M337 -2l2 2-2 2-2-2z" fill="#c8a96b"/>
+    <circle cx="343" cy="0" r="0.9" fill="#c8a96b" opacity="0.7"/>
+    <!-- Quatrefoils flanking the centre (axis ± 18) -->
+    <g fill="#c8a96b">
+      <circle cx="271" cy="-2.55" r="1.7"/><circle cx="273.55" cy="0" r="1.7"/>
+      <circle cx="271" cy="2.55" r="1.7"/><circle cx="268.45" cy="0" r="1.7"/>
+    </g>
+    <circle cx="271" cy="0" r="1.45" fill="#6e1f2e"/>
+    <g fill="#c8a96b">
+      <circle cx="307" cy="-2.55" r="1.7"/><circle cx="309.55" cy="0" r="1.7"/>
+      <circle cx="307" cy="2.55" r="1.7"/><circle cx="304.45" cy="0" r="1.7"/>
+    </g>
+    <circle cx="307" cy="0" r="1.45" fill="#6e1f2e"/>
+    <!-- Centre: burgundy lozenge in a thin gold frame, bright gold heart -->
+    <path d="M289 -5.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="#6e1f2e" stroke="#c8a96b" stroke-width="0.9"/>
+    <circle cx="289" cy="0" r="1.1" fill="#dcba8a"/>
+  </g>
+</svg>

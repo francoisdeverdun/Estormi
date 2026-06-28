@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- CloudKit doorbell: this helper writes one tiny record into the user's
+	     PRIVATE database of the container the iOS app subscribes to. These are
+	     restricted entitlements — they only take effect under a provisioning
+	     profile that authorizes them (automatic signing handles that in
+	     development; a Developer ID profile is required for distribution). -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.app.estormi.ios</string>
+	</array>
+	<!-- Environment matrix (the #1 silent-failure trap — keep both sides
+	     aligned): Apple Development signing → Development; Developer ID
+	     signing → Production (switch this value when cutting a distribution
+	     build). The iOS app follows the same rule: debug installs talk to
+	     Development, TestFlight/App Store builds talk to Production. -->
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Development</string>
+</dict>
+</plist>

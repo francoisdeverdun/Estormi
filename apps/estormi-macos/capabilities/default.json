@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "No commands exposed by design — all traffic is HTTP to loopback FastAPI.",
+  "windows": ["main"],
+  "permissions": []
+}

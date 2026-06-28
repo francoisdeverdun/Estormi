@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Estormi's single pre-commit hook. Three fast local steps before each commit:
+#   1. ruff             — lint the staged Python (the local fast-feedback gate);
+#   2. secret/PII scan  — scripts/security_scan.py over staged content;
+#   3. graphify         — rebuild the local code graph so an AI assistant sees HEAD.
+#
+# The heavier security suite (bandit, detect-secrets, pip-audit, TruffleHog)
+# runs in CI on every PR (.github/workflows/security.yml); this hook keeps the
+# commit snappy with only the two cheap checks. ruff and graphify skip
+# gracefully if their tool/venv is absent, but the secret/PII scan is
+# fail-closed: it runs with the venv python or a system python3, and refuses
+# the commit (loudly, non-zero) if no python3 exists at all — it must never
+# silently no-op and let unscanned content through.
+#
+# This is the ONLY active hook mechanism. `.pre-commit-config.yaml` is kept as
+# the ruff-version pin and for an optional manual `pre-commit run --all-files`,
+# but is NOT installed — that would conflict with core.hooksPath. graphify-out/
+# is gitignored (it embeds absolute build paths), so the graph never gets committed.
+#
+# Activated by `scripts/setup-graphify-skill.sh` setting
+# `git config core.hooksPath .githooks`. Without that step, this hook
+# does not run.
+
+set -euo pipefail
+
+# Skip during rebase / cherry-pick / merge — graphify will catch up on the
+# final commit and we'd otherwise rebuild N times in a row for no benefit.
+if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] \
+   || [ -d "$(git rev-parse --git-dir)/rebase-apply" ] \
+   || [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] \
+   || [ -f "$(git rev-parse --git-dir)/CHERRY_PICK_HEAD" ]; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# --- 1 + 2. Lint + secret/PII hygiene on the STAGED files (fast local gate) --
+# Scoped to exactly what this commit stages, so an unrelated dirty file never
+# blocks an innocent commit, and nothing slips in unscanned. The heavier suite
+# (bandit, detect-secrets, pip-audit, TruffleHog) runs in CI; these two are the
+# cheap checks. ruff skips gracefully without the venv; the secret/PII scan is
+# fail-closed (see below).
+# NUL-delimited collection is safe for paths with spaces and bash 3.2 (macOS).
+STAGED=()
+while IFS= read -r -d '' _f; do
+    STAGED+=("$_f")
+done < <(git diff --cached -z --name-only --diff-filter=ACM)
+
+if [ "${#STAGED[@]}" -gt 0 ]; then
+    RUFF="$REPO_ROOT/.venv/bin/ruff"
+    if [ -x "$RUFF" ]; then
+        PY_STAGED=()
+        for _f in "${STAGED[@]}"; do
+            case "$_f" in *.py) PY_STAGED+=("$_f") ;; esac
+        done
+        if [ "${#PY_STAGED[@]}" -gt 0 ]; then
+            echo "[pre-commit] ruff check on staged Python …"
+            if ! ( cd "$REPO_ROOT" && "$RUFF" check --force-exclude "${PY_STAGED[@]}" ); then
+                echo "[pre-commit] ruff found issues. Fix them, or commit with --no-verify to skip." >&2
+                exit 1
+            fi
+        fi
+    fi
+
+    # The secret/PII scan is the fail-closed gate, so it must run with a python
+    # that always exists — never silently skip on a fresh clone with no venv.
+    # Prefer the project venv (matches CI's interpreter), then fall back to a
+    # system python3. Only if NO python3 exists at all do we bail, and then
+    # loudly + non-zero so the gate can never quietly no-op.
+    if [ -f "$REPO_ROOT/scripts/security_scan.py" ]; then
+        SCAN_PY=""
+        if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+            SCAN_PY="$REPO_ROOT/.venv/bin/python"
+        elif command -v python3 >/dev/null 2>&1; then
+            SCAN_PY="$(command -v python3)"
+        fi
+        if [ -z "$SCAN_PY" ]; then
+            echo "[pre-commit] FATAL: no python3 found — cannot run the secret/PII scan." >&2
+            echo "[pre-commit] Refusing to commit unscanned content (fail-closed). Install python3," >&2
+            echo "[pre-commit] or commit with --no-verify if you have manually verified the staged files." >&2
+            exit 1
+        fi
+        echo "[pre-commit] secret/PII scan on staged files …"
+        if ! ( cd "$REPO_ROOT" && "$SCAN_PY" scripts/security_scan.py "${STAGED[@]}" ); then
+            echo "[pre-commit] security scan flagged staged content. Resolve before committing." >&2
+            exit 1
+        fi
+    fi
+fi
+
+# --- 3. Locate the graphify CLI. Prefer the project venv (matches what
+# setup-graphify-skill.sh installs); fall back to PATH.
+GRAPHIFY=""
+if [ -x "$REPO_ROOT/.venv/bin/graphify" ]; then
+    GRAPHIFY="$REPO_ROOT/.venv/bin/graphify"
+elif command -v graphify >/dev/null 2>&1; then
+    GRAPHIFY="$(command -v graphify)"
+fi
+
+if [ -z "$GRAPHIFY" ]; then
+    echo "[graphify hook] graphify not installed — skipping graph rebuild."
+    echo "[graphify hook] Run scripts/setup-graphify-skill.sh once to enable."
+    exit 0
+fi
+
+# Incremental `update` merges into the existing graph.json and reuses
+# graphify-out/cache/, so it never garbage-collects symbols whose code was
+# renamed or deleted — they linger as ghost nodes forever (even `--force`
+# keeps them, because it reuses the cache). The only clean cure is a
+# cache-free rebuild. Do that automatically whenever this commit stages a
+# deletion or rename — exactly when ghosts would otherwise appear — and keep
+# the fast incremental path for ordinary edits.
+if git diff --cached --name-only --diff-filter=DR | grep -q .; then
+    echo "[graphify hook] Deletions/renames staged — clean-rebuilding graph (no cache)."
+    rm -rf "$REPO_ROOT/graphify-out"
+fi
+
+echo "[graphify hook] Updating graphify-out/graph.json …"
+if ! "$GRAPHIFY" update "$REPO_ROOT" >/dev/null; then
+    echo "[graphify hook] graphify update FAILED. Aborting commit." >&2
+    echo "[graphify hook] Re-run manually to see the error, or commit with --no-verify to skip." >&2
+    exit 1
+fi
+
+# Sanitise the developer's local-username out of node IDs before staging.
+# graphify bakes paths like `users_<whoami>_src_estormi_…` into node IDs,
+# which would publish each committer's home-dir username if the repo is
+# public. Replace the home-dir segment with a generic `user` marker. The
+# public GitHub URL (com/<owner>/Estormi) is untouched because it lives
+# in a different sibling segment shape.
+GRAPH_JSON="$REPO_ROOT/graphify-out/graph.json"
+GRAPH_REPORT="$REPO_ROOT/graphify-out/GRAPH_REPORT.md"
+if [ -f "$GRAPH_JSON" ]; then
+    python3 - <<'PY' "$GRAPH_JSON" "$GRAPH_REPORT"
+import re
+import sys
+from pathlib import Path
+
+# Match a `users_<token>_src_` segment regardless of which developer's
+# username got baked in, and replace `<token>` with `user`.
+pattern = re.compile(r"users_[A-Za-z0-9.\-]+_src_")
+for raw in sys.argv[1:]:
+    path = Path(raw)
+    if not path.is_file():
+        continue
+    text = path.read_text(encoding="utf-8")
+    new = pattern.sub("users_user_src_", text)
+    if new != text:
+        path.write_text(new, encoding="utf-8")
+PY
+fi
+
+# graphify-out/ is gitignored, so this `git add` is intentionally a no-op
+# for the tracked tree (the files never enter a commit); it stays only as a
+# guard in case the ignore rule is ever relaxed. The refreshed graph lives
+# locally for queries.
+git add "$GRAPH_JSON" "$GRAPH_REPORT" 2>/dev/null || true

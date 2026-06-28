@@ -1,0 +1,97 @@
+Estormi — Ars Memoriae
+Copyright 2026 Estormi contributors
+
+This product includes software developed by the Estormi contributors.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file for the
+full license text.
+
+---
+
+Third-party components
+----------------------
+
+The packaged macOS application bundles third-party software in three layers: a
+CPython interpreter, the Python dependency wheels, and the Rust crates compiled
+into the native shell.
+
+Bundled runtime — CPython
+-------------------------
+
+- **CPython** (3.12.x, via the python-build-standalone redistribution) — the
+  embedded Python interpreter that runs the server and engines. Python Software
+  Foundation License (PSF-2.0). Its verbatim LICENSE is collected into
+  `THIRD-PARTY-LICENSES/cpython/` at build time. The standalone build itself is
+  published under the PSF/MIT terms documented at
+  https://github.com/astral-sh/python-build-standalone
+
+Python dependency wheels
+------------------------
+
+The bundled Python dependencies are pinned in
+`requirements/requirements-bundle.txt`; most are MIT, BSD, or Apache 2.0. The
+components below carry copyleft or otherwise attribution-required licenses and
+are called out explicitly:
+
+- **python-soxr** (soxr 1.1.0) — Python bindings for libsoxr, the SoX
+  Resampler Library. GNU Lesser General Public License v2.1 or later
+  (LGPL-2.1+). Source: https://github.com/dofuuz/python-soxr
+- **pycountry** (26.2.16) — ISO country/subdivision data. GNU Lesser General
+  Public License v2.1 only (LGPL-2.1-only). Source:
+  https://github.com/pycountry/pycountry
+- **odfpy** (1.4.1) — OpenDocument (.odt/.ods) reader. The importable `odf`
+  library Estormi uses is GNU Lesser General Public License v2.1 or later
+  (LGPL-2.1-or-later); the package additionally ships standalone command-line
+  tools under GPL-2.0 which Estormi neither bundles in its call path nor
+  invokes. Its wheel carries no license file, so the verbatim LGPL-2.1 text is
+  vendored at `make/extra-licenses/odfpy/` and collected into the bundle.
+  Source: https://github.com/eea/odfpy
+- **certifi** (2026.5.20) — Mozilla CA certificate bundle. Mozilla Public
+  License 2.0 (MPL-2.0). Source: https://github.com/certifi/python-certifi
+- **tqdm** (4.68.2) — progress bars. Mozilla Public License 2.0 and MIT
+  (MPL-2.0 AND MIT). Source: https://github.com/tqdm/tqdm
+- **pypdfium2** (5.9.0) — Python bindings for Google's PDFium. The bindings are
+  Apache-2.0 / BSD-3-Clause; the bundled PDFium binary carries BSD-3-Clause
+  plus its own third-party component notices (FreeType, libjpeg, libpng,
+  libtiff, zlib, ICU) and CC-BY-4.0 for some data files. Source:
+  https://github.com/pypdfium2-team/pypdfium2
+
+User-downloaded models (not redistributed)
+-------------------------------------------
+
+Estormi does not ship any model weights. The local briefing/TTS models are
+downloaded by the user at runtime from their upstream sources and remain
+governed by their own licenses, which the user accepts on download:
+
+- **Ministral-3-14B-Instruct** (Mistral) — Apache-2.0 (default briefing model).
+- **Voxtral** mlx-audio TTS (Mistral) — Apache-2.0.
+- **Gemma-4-12B-Instruct** (Google) — **Gemma Terms of Use**, a custom non-OSI
+  license with use restrictions, NOT Apache-2.0. Opt-in tier.
+
+Rust crates (native shell)
+--------------------------
+
+The macOS shell (`apps/estormi-macos/`) statically links Rust crates, declared
+in `apps/estormi-macos/Cargo.toml` and pinned in `apps/estormi-macos/Cargo.lock`.
+The notable direct dependencies — Tauri (`tauri`, `tauri-plugin-shell`), `axum`,
+`tokio`, `reqwest`, `serde`/`serde_json`, `image`, `qrcode`, `sha2`, `chrono`,
+`anyhow`, and the `whatsapp-rust`/`wacore` family — are each dual-licensed
+MIT OR Apache-2.0 (a small number MIT-only). The authoritative, verbatim
+per-crate license and copyright texts are generated from the lockfile with
+`make rust-licenses` (which runs `cargo about generate` in `apps/estormi-macos/`),
+committed at `apps/estormi-macos/THIRD-PARTY-RUST.md`, and collected into the
+bundle at build time.
+
+The license texts for every bundled Python package, the Rust crates, and the
+CPython interpreter are collected into
+`Estormi.app/Contents/Resources/THIRD-PARTY-LICENSES/` at build time:
+
+- one directory per Python distribution — each wheel's verbatim `LICENSE*` /
+  `COPYING*` / `NOTICE*` / `AUTHORS*` file from its `*.dist-info`. When a wheel
+  ships no such file (e.g. odfpy, mistral_common, sentencepiece, openpyxl,
+  tokenizers, onnxruntime), the build falls back to the wheel's `METADATA`
+  license declaration, and any verbatim copyleft text needed to satisfy the
+  license (LGPL-2.1 for odfpy) is supplied from the committed
+  `make/extra-licenses/` overlay — so no bundled package is omitted;
+- `rust/` — the committed `THIRD-PARTY-RUST.md` (all statically-linked crates);
+- `cpython/` — the interpreter's `LICENSE.txt`.

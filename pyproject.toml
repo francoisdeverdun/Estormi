@@ -1,0 +1,221 @@
+[project]
+name = "estormi"
+# One of four version declarations (also packages/estormi_server/__init__.py,
+# apps/estormi-macos/Cargo.toml, apps/estormi-macos/tauri.conf.json); run
+# `make set-version V=…` to rewrite all four. Pinned by test_version_consistency.
+version = "0.0.2"
+description = "Estormi: Ars Memoriae"
+requires-python = ">=3.12"
+readme = "README.md"
+license = "Apache-2.0"
+
+[project.urls]
+Homepage = "https://github.com/francoisdeverdun/Estormi"
+Repository = "https://github.com/francoisdeverdun/Estormi"
+Documentation = "https://github.com/francoisdeverdun/Estormi/tree/main/docs"
+Changelog = "https://github.com/francoisdeverdun/Estormi/blob/main/CHANGELOG.md"
+
+# Python dependencies live in two files, intentionally — they serve different
+# audiences and we don't try to derive one from the other:
+#
+#   1. packages/estormi_server/requirements.txt — dev / contributor install. Loose `>=`
+#                                       floors so a fresh `pip install -r` on a
+#                                       contributor's machine picks compatible
+#                                       latest versions. Drives `scripts/setup.sh`,
+#                                       CI lint+test, and pre-commit.
+#
+#   2. requirements/requirements-bundle.txt — packaged macOS app. Exact `==`
+#                                       pins for every transitive dep so two builds of
+#                                       the same Estormi release ship identical
+#                                       bytes. Drives `make bundle` and the
+#                                       embedded `python/` interpreter.
+#
+# Subpackages are editable installs (`pip install -e packages/memory_core`) and
+# deliberately NOT declared as `dependencies` here — we don't want pip trying to
+# resolve them off PyPI.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# The six first-party Python packages live under packages/; list it as a source
+# root so import-sorting (I) classifies ``estormi_server`` / ``memory_core`` /
+# … as first-party rather than third-party.
+src = [".", "packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+# Static type checking (`make typecheck`, CI `Python typecheck` job). `basic`
+# mode is the entry rung: it catches None-handling and signature mismatches
+# without the churn of `strict` on a previously-untyped tree. We ratchet by
+# package — a package is added only once it is green, never with blanket
+# ignores. Covered: the pure domain layer (memory_core), the live server
+# (estormi_server), the connector base layer (connectors), and the optional
+# distill engine (estormi_distill).
+# Next rungs (NOT yet green — type them down, then add): estormi_ingestion
+# (~24 basic errors) and estormi_briefing (~30). Once all six pass basic, bump
+# memory_core/estormi_server to `standard`.
+[tool.pyright]
+include = [
+    "packages/memory_core",
+    "packages/estormi_server",
+    "packages/connectors",
+    "packages/estormi_distill",
+]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+# Resolve third-party + editable subpackage imports from the project venv. Both
+# `make typecheck` and the CI typecheck job run against a `.venv` here, so import
+# resolution is identical in either place.
+venvPath = "."
+venv = ".venv"
+# The local subpackages (`memory_core`, `connectors`) live under packages/ as
+# editable installs; pyright doesn't follow the editable .pth, so put their
+# parent (packages/) on the search path — same effect as the tests' conftest shim.
+extraPaths = ["packages"]
+
+# Pytest configuration (single source of truth — folded in from the former
+# pytest.ini so all tool config lives in pyproject.toml).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-config --strict-markers"
+# Hard PER-TEST ceiling (not a whole-suite budget): a hung test (infinite loop,
+# deadlock, runaway allocation) fails fast instead of taking down the machine.
+# No real test comes close to 60s; the slowest single test is the real-embeddings
+# e2e roundtrip, still well inside the ceiling.
+timeout = 60
+markers = [
+    "unit: fast pure-Python tests with no app server or external service boundary",
+    "integration: tests crossing module, database, or mocked service boundaries",
+    "e2e: end-to-end product scenarios through public HTTP/API surfaces",
+    "regression: locks a previously fixed bug or production incident",
+    "contract: verifies documentation, schema, or external interface contracts",
+    "slow: intentionally slower checks kept out of quick local loops",
+    "performance: latency and throughput benchmarks with explicit thresholds",
+]
+# Leaked background threads and unraisable exceptions are resource bugs, not
+# noise — fail the run so they cannot regress silently (see the client fixture
+# teardown in conftest.py).
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
+
+# ── Import Linter — executable layering contracts ─────────────────────────────
+# Folded in from the former root ``.importlinter`` (see
+# docs/adr/0009-layering-dag-import-linter.md). Encodes the one-way dependency
+# rule from CLAUDE.md ("Layering"). Every dependency edge points strictly
+# downward; it is NOT a single linear pass-through — a higher layer may import
+# any lower layer directly (e.g. ``estormi_server`` imports ``memory_core``
+# directly, not only via ``connectors``). The layers, top to bottom:
+#
+#     apps/*  ->  estormi_server  ->  connectors  ->  memory_core
+#
+# ``memory_core`` is the pure bottom layer and must never reach upward;
+# ``connectors`` must not reach into the server/app layer, the ingestion
+# scripts, or the briefing engine; ``estormi_briefing`` may import down into
+# ``estormi_ingestion`` but never the reverse; and neither engine may import the
+# optional ``estormi_distill`` engine. Complementary AST contracts cover what
+# grimp can't express from these roots — "no FastAPI in memory_core"
+# (tests/contract/test_no_fastapi_in_memory_core.py) and "no engine — ingestion,
+# briefing, or distill — may import the server" (test_no_server_imports_in_ingestion.py).
+#
+# Run locally:  lint-imports (from the repo root, with packages/ on PYTHONPATH)
+# In CI:        exercised in-process by tests/contract/test_import_linter_layers.py
+[tool.importlinter]
+# All six layers are root packages so grimp resolves the qualified import form
+# the code actually uses (``from estormi_server.tools import …``). Forbidding the
+# bare package names below then catches any upward import — and stays correct as
+# new modules are added to any of them.
+root_packages = [
+    "memory_core",
+    "connectors",
+    "estormi_server",
+    "estormi_ingestion",
+    "estormi_briefing",
+    "estormi_distill",
+]
+
+[[tool.importlinter.contracts]]
+name = "memory_core is the pure bottom layer and must not import upward"
+type = "forbidden"
+source_modules = ["memory_core"]
+forbidden_modules = [
+    "connectors",
+    "estormi_server",
+    "estormi_ingestion",
+    "estormi_briefing",
+    "estormi_distill",
+]
+
+[[tool.importlinter.contracts]]
+name = "connectors must not import the server/app layer or any engine package"
+type = "forbidden"
+source_modules = ["connectors"]
+forbidden_modules = [
+    "estormi_server",
+    "estormi_ingestion",
+    "estormi_briefing",
+    "estormi_distill",
+]
+
+[[tool.importlinter.contracts]]
+# One-way edge between the two engine-side packages: the Briefing engine reads
+# back through estormi_ingestion.knowledge / estormi_ingestion.shared, so the
+# reverse import would create a package cycle.
+name = "ingestion must not import the briefing engine"
+type = "forbidden"
+source_modules = ["estormi_ingestion"]
+forbidden_modules = ["estormi_briefing"]
+
+[[tool.importlinter.contracts]]
+# The Distillation engine sits beside Briefing and imports down into it — never
+# the other way round: a briefing run must compose identically whether the
+# distillation feature exists or not.
+name = "ingestion and briefing must not import the distillation engine"
+type = "forbidden"
+source_modules = [
+    "estormi_ingestion",
+    "estormi_briefing",
+]
+forbidden_modules = ["estormi_distill"]
+
+[[tool.importlinter.contracts]]
+# Distill is the optional third engine and obeys the same upward rule as the
+# other two: an engine never reaches up into the server/app layer. It imports
+# DOWN into estormi_briefing / estormi_ingestion.shared and memory_core only.
+name = "the distillation engine must not import the server/app layer"
+type = "forbidden"
+source_modules = ["estormi_distill"]
+forbidden_modules = ["estormi_server"]
+
+[[tool.importlinter.contracts]]
+# The same upward rule for the two engines that historically formed a server
+# cycle. AST tests (test_no_server_imports_in_ingestion.py) also cover this, but
+# distill had a dedicated import-linter contract while these did not — close the
+# enforcement asymmetry so all three engines are guarded the same way.
+name = "ingestion and briefing must not import the server/app layer"
+type = "forbidden"
+source_modules = [
+    "estormi_ingestion",
+    "estormi_briefing",
+]
+forbidden_modules = ["estormi_server"]
+
+# ── Coverage (coverage.py, via pytest-cov in `make test`) ─────────────────────
+[tool.coverage.run]
+# Dev-only CLIs that ship in the tree but are never imported by an engine or the
+# server: counting their 0% drags the package number down without signal. Keep
+# this list tight — only genuinely un-shippable harness code belongs here.
+omit = [
+    "*/estormi_briefing/stage_harness.py",
+]
+
+[tool.coverage.report]
+fail_under = 80

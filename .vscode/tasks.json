@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build & Install Estormi",
+      "type": "shell",
+      "command": "make bundle",
+      "options": {"cwd": "${workspaceFolder}"},
+      "group": {"kind": "build", "isDefault": true},
+      "presentation": {"reveal": "always", "panel": "new"},
+      "problemMatcher": []
+    },
+    {
+      "label": "Kill Estormi app only",
+      "type": "shell",
+      "command": "pkill -f 'app.estormi.local' 2>/dev/null; pkill -f 'Estormi.app/Contents/MacOS/estormi' 2>/dev/null; echo 'Estormi stopped'",
+      "options": {"cwd": "${workspaceFolder}"},
+      "group": "none",
+      "presentation": {"reveal": "always", "panel": "new"},
+      "problemMatcher": []
+    },
+    {
+      "label": "Kill Estormi app + restart",
+      "type": "shell",
+      "command": "pkill -f 'app.estormi.local' 2>/dev/null; pkill -f 'Estormi.app' 2>/dev/null; sleep 2; lsof -ti :8000 | xargs kill -9 2>/dev/null; sleep 1; open /Applications/Estormi.app; echo 'Estormi relaunched'",
+      "options": {"cwd": "${workspaceFolder}"},
+      "group": "none",
+      "presentation": {"reveal": "always", "panel": "new"},
+      "problemMatcher": []
+    }
+  ]
+}

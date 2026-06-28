@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="332" height="28" role="img" aria-label="qa layers: unit+integration+e2e+contract">
+  <title>qa layers: unit+integration+e2e+contract</title>
+  <clipPath id="r"><rect width="332" height="28" rx="4" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="86" height="28" fill="#11100C"/>
+    <rect x="86" width="246" height="28" fill="#C49A3A"/>
+  </g>
+  <g text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11" font-weight="700">
+    <text x="43.0" y="18" fill="#F4EBDD">QA LAYERS</text>
+    <text x="209.0" y="18" fill="#11100C">UNIT+INTEGRATION+E2E+CONTRACT</text>
+  </g>
+</svg>

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "estormi-distill"
+version = "1.0.0"
+description = "Estormi Distill engine: optional local-quill QLoRA retrain on the user's own briefing archive."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in estormi_server/requirements.txt (single
+# source of truth for the desktop bundle); intentionally not duplicated here so
+# editable installs don't fight the bundle's pin set. Mirrors memory_core.
+dependencies = []
+
+# Flat layout: the package directory IS the pyproject directory, so map the
+# `estormi_distill` import name to `.`. No subpackages.
+[tool.setuptools]
+packages = ["estormi_distill"]
+
+[tool.setuptools.package-dir]
+estormi_distill = "."

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 32" role="img" aria-labelledby="title desc">
+  <title id="title">Estormi wordmark</title>
+  <desc id="desc">Estormi wordmark in deep gold gradient Cinzel caps for light surfaces.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9A7536"/>
+      <stop offset="60%" stop-color="#7A5C28"/>
+      <stop offset="100%" stop-color="#5A4420"/>
+    </linearGradient>
+  </defs>
+  <text x="0" y="24" font-family="Cinzel, 'Trajan Pro', Georgia, serif" font-weight="700"
+        font-size="22" fill="url(#gold)" letter-spacing="3">ESTORMI</text>
+</svg>

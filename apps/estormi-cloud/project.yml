@@ -1,0 +1,57 @@
+name: EstormiCloud
+options:
+  bundleIdPrefix: app.estormi
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # No DEVELOPMENT_TEAM committed: pass it on the command line
+    # (`make doorbell DOORBELL_TEAM=…`) or set it in Xcode. Automatic signing
+    # then creates the App ID, the iCloud container and the provisioning
+    # profile on the fly (`xcodebuild -allowProvisioningUpdates`).
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  EstormiCloud:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources
+        excludes:
+          - "EstormiCloud.entitlements"
+    # project.yml is the single source of truth for the Info.plist (same
+    # convention as apps/estormi-ios): XcodeGen regenerates it under the
+    # gitignored build/ dir on every `xcodegen generate`.
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleDisplayName: EstormiCloud
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Faceless background executable — never shows in the Dock. The "app"
+        # shape exists only because CloudKit is a restricted entitlement and a
+        # bare executable has nowhere to carry the provisioning profile that
+        # authorizes it (TN3125 — "daemon in app's clothing").
+        LSUIElement: true
+        NSHumanReadableCopyright: "© 2026 Estormi"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.estormi.doorbell
+        CODE_SIGN_ENTITLEMENTS: Sources/EstormiCloud.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        # Matches the eventual Developer ID shape (notarization mandates it);
+        # CloudKit works fine under the hardened runtime.
+        ENABLE_HARDENED_RUNTIME: YES
+
+schemes:
+  EstormiCloud:
+    build:
+      targets:
+        EstormiCloud: all

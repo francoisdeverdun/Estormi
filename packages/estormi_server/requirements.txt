@@ -1,0 +1,53 @@
+# Dev / contributor install. Loose `>=` floors — fresh `pip install -r` picks
+# compatible latest versions. The packaged macOS app uses exact pins in
+# `requirements-bundle.txt`; see pyproject.toml for the rationale.
+fastapi>=0.111.0
+# Security floor: starlette < 1.3.0 carries GHSA-82w8-qh3p-5jfq /
+# GHSA-jp82-jpqv-5vv3. Pinned explicitly (it is otherwise transitive via
+# fastapi) so neither a dev install nor the lock can resolve a vulnerable build.
+starlette>=1.3.1
+uvicorn[standard]>=0.30.0
+httpx>=0.27.0
+qdrant-client[local]>=1.11.0
+fastembed>=0.8.0
+aiosqlite>=0.20.0
+# Floor form (matches the other deps); bounded <4 because APScheduler 4.x is an
+# API-breaking rewrite. Canonical casing mirrors requirements-bundle.txt.
+APScheduler>=3.10.4,<4
+slowapi>=0.1.9
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+structlog>=24.1.0
+sse-starlette>=2.1.0
+pyyaml>=6.0
+# ≥ 0.3.28: the Gemma 4 12B catalog tier needs a vendored llama.cpp that
+# knows the gemma4 arch — 0.3.28 is the version it's validated on, and
+# matches the requirements-bundle.txt pin.
+llama-cpp-python>=0.3.28
+# On-device briefing narration: Voxtral TTS via MLX (Apple Silicon only). The
+# Mac synthesizes the briefing to .m4a (see memory_core/tts_local.py); the iOS
+# companion just plays it. mlx-audio pulls mlx; mistral-common[audio] provides
+# the Voxtral tekken tokenizer. Bundle pins the exact versions.
+mlx-audio>=0.4.4
+soundfile>=0.14.0
+mistral-common[audio]>=1.11.0
+keyring>=25.0.0
+# APNs JWT (ES256) signing for the iOS "new briefing" push — see
+# estormi_ingestion/shared/delivery/apns_push.py. Bundle pins the exact version.
+# Security floor: cryptography < 48.0.1 carries GHSA-537c-gmf6-5ccf. Bounded
+# <49 because the 49.x major is unvalidated against the ES256 APNs signing path
+# (apns_push.py) — bump deliberately after testing, like APScheduler<4.
+cryptography>=48.0.1,<49
+openpyxl>=3.1.0
+python-pptx>=1.0.0
+python-docx>=1.2.0
+pdfplumber>=0.11.9
+google-api-python-client>=2.149.0
+google-auth-oauthlib>=1.2.1
+feedparser>=6.0.0
+jinja2>=3.1.0
+# graphifyy provides tree-sitter-based structural extraction for the `code`
+# connector (extract_python / extract_js / …) and ships the grammars as wheels.
+# Bundle pins (including the full tree-sitter-* grammar set) live in
+# requirements-bundle.txt.
+graphifyy>=0.8.19

@@ -1,0 +1,89 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/estormi-macos/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'apps/estormi-macos/**'
+      - '.github/workflows/rust.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-security:
+    name: Security / Rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Rust toolchain
+        # The crate REQUIRES nightly (portable_simd in the wacore-binary dep) and
+        # pins the exact nightly in apps/estormi-macos/rust-toolchain.toml. rustup honors
+        # that directory file inside apps/estormi-macos/, so we install that toolchain
+        # explicitly here (a `stable` default would be dead — every cargo
+        # invocation below runs from apps/estormi-macos/ and overrides it).
+        working-directory: apps/estormi-macos
+        run: |
+          rustup toolchain install --profile minimal --component clippy,rustfmt
+          rustup show active-toolchain
+
+      - name: Cache cargo-audit binary
+        id: cache-cargo-audit
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
+
+      - name: Install cargo-audit
+        if: steps.cache-cargo-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: apps/estormi-macos -> target
+
+      - name: Prepare bundled resource placeholders
+        run: mkdir -p python
+
+      - name: Cargo format check
+        working-directory: apps/estormi-macos
+        run: cargo fmt --check
+
+      - name: Cargo clippy
+        working-directory: apps/estormi-macos
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Cargo test
+        working-directory: apps/estormi-macos
+        # Runs the WhatsApp sidecar's unit tests (the auth/helpers/staging/types
+        # #[cfg(test)] modules) and compiles every target, so any new ``#[test]``
+        # gates automatically. ``--locked`` keeps Cargo.lock the source of truth —
+        # the build fails rather than silently bumping a dependency.
+        run: cargo test --locked --all-targets
+
+      - name: Cargo audit
+        working-directory: apps/estormi-macos
+        run: cargo audit

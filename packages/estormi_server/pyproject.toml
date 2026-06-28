@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "estormi-server"
+description = "Estormi server: FastAPI HTTP + MCP transport and the daily engines."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in requirements.txt (the single source of truth
+# for the desktop bundle); intentionally not duplicated here.
+dependencies = []
+# Single-source the version from estormi_server.__version__ — the same constant
+# main.py and api/mcp_rpc.py forward, kept in lockstep with the app's other
+# version files by tests/contract/test_version_consistency.py.
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = { attr = "estormi_server.__version__" }
+
+# Flat layout: the package directory IS the pyproject directory, so map the
+# `estormi_server` import name to `.`. Subpackages are listed explicitly (the
+# package is never globbed by pnpm and is sys.path-imported in dev/tests; this
+# metadata exists for editable installs + declared layering).
+[tool.setuptools]
+packages = [
+    "estormi_server",
+    "estormi_server.api",
+    "estormi_server.integrations",
+    "estormi_server.server",
+    "estormi_server.server.launchers",
+    "estormi_server.services",
+    "estormi_server.sql",
+    "estormi_server.storage",
+]
+
+[tool.setuptools.package-dir]
+estormi_server = "."

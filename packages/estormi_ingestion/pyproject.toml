@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "estormi-ingestion"
+version = "1.0.0"
+description = "Estormi Ingestion engine: per-source ingestion scripts driven by connectors."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in estormi_server/requirements.txt (single
+# source of truth for the desktop bundle); intentionally not duplicated here.
+dependencies = []
+
+# Flat layout: the package directory IS the pyproject directory, so map the
+# `estormi_ingestion` import name to `.`. Subpackages listed explicitly.
+[tool.setuptools]
+packages = [
+    "estormi_ingestion",
+    "estormi_ingestion.apple_mail",
+    "estormi_ingestion.apple_notes",
+    "estormi_ingestion.documents",
+    "estormi_ingestion.google_calendar",
+    "estormi_ingestion.imessage",
+    "estormi_ingestion.knowledge",
+    "estormi_ingestion.reminders",
+    "estormi_ingestion.shared",
+    "estormi_ingestion.shared.delivery",
+    "estormi_ingestion.shared.host",
+    "estormi_ingestion.whatsapp",
+    "estormi_ingestion.whoop",
+]
+
+[tool.setuptools.package-dir]
+estormi_ingestion = "."

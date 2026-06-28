@@ -1,0 +1,69 @@
+# Dependabot configuration (schema v2).
+#
+# Four ecosystems, one weekly cadence each. Minor + patch bumps are grouped
+# per ecosystem into a single PR to keep the noise down; majors stay separate
+# so they get individual review. The npm entry covers the pnpm workspace —
+# Dependabot's "npm" ecosystem reads pnpm lockfiles too.
+version: 2
+updates:
+  # The repo root has no pip manifest (pyproject declares no [project.dependencies]),
+  # so point Dependabot at the real ones: the contributor floor and the pinned
+  # bundle/lock under requirements/. Otherwise no Python security bumps are ever
+  # proposed — the bundled wheels are the largest attack surface.
+  - package-ecosystem: pip
+    directories:
+      - "/packages/estormi_server"
+      - "/requirements"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: "/apps/estormi-macos"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
