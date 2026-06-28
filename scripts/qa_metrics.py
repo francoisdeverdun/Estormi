@@ -22,7 +22,7 @@ COVERAGE_FLOOR = 80
 
 
 # Brand palette — keep badges on the same ink + burnished-gold scheme as
-# `assets/badges/version.svg` and the rest of the Estormi brand surface.
+# the rest of the Estormi brand surface.
 _INK_BLACK = "#11100C"
 _IVORY = "#F4EBDD"
 _BURNISHED_GOLD = "#C49A3A"

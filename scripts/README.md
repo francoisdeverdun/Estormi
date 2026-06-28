@@ -27,7 +27,6 @@ detached launchd job. `make install-agents` actively retires any stale
 | Script | Purpose | Invoked by |
 | --- | --- | --- |
 | `qa_metrics.py` | Refresh `assets/badges/{coverage,tests,qa-layers}.svg` from pytest collection + `build/coverage/coverage.json`. | `make test-metrics`; CI |
-| `version_badge.py` | Generate the download badge `assets/badges/version.svg` from the latest git tag. | `make tag` |
 | `set_version.py` | Set the macOS app version everywhere in one command. | `make set-version V=X.Y.Z` |
 | `gen_openapi.py` | Generate the canonical OpenAPI spec from the live FastAPI app (`--check` verifies it is current). | `make openapi` / `make openapi-check` |
 

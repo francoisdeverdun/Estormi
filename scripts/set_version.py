@@ -9,21 +9,22 @@ another (see tests/contract/test_version_consistency.py):
   3. apps/estormi-macos/Cargo.toml      — [package].version
   4. apps/estormi-macos/tauri.conf.json — top-level "version"
 
-Bumping only those four is what shipped a stale spec/badge/README to a public
-release: the OpenAPI spec (`docs/specs/openapi.json` embeds `info.version`), the
-download badge, and the README "Latest build" line all silently fell behind. So
-this also re-derives every version-bearing artifact that a bump must keep in
-sync:
+Bumping only those four is what shipped a stale spec/README to a public
+release: the OpenAPI spec (`docs/specs/openapi.json` embeds `info.version`) and
+the README "Latest build" line both silently fell behind. So this also
+re-derives every version-bearing artifact that a bump must keep in sync:
 
   5. apps/estormi-macos/Cargo.lock — the embedded estormi [[package]] version
                                    (a stale lock fails every `cargo --locked`)
-  6. assets/badges/version.svg   — regenerated via scripts/version_badge.py
-  7. README.md                   — the "Latest build — Estormi vX.Y.Z" line
-  8. docs/specs/openapi.json      — regenerated via scripts/gen_openapi.py
+  6. README.md                   — the "Latest build — Estormi vX.Y.Z" line
+  7. docs/specs/openapi.json      — regenerated via scripts/gen_openapi.py
+
+The README download badge is NOT regenerated here: it's a live shields.io
+endpoint reading the latest GitHub release, so it tracks the tag on its own.
 
 The CHANGELOG still needs a curated, dated section, so this prints a reminder
 rather than guessing one. A contract test (test_version_consistency.py) pins
-1–6 together as the safety net; this is the generator that keeps it green.
+these together as the safety net; this is the generator that keeps it green.
 
     python scripts/set_version.py 1.8.1
     make set-version V=1.8.1
@@ -145,7 +146,7 @@ def _regenerate(script: str, *args: str) -> None:
         print(
             f"  WARNING: `{rel}` failed (exit {exc.returncode}). The version "
             f"files are set, but this artifact is NOT regenerated — run "
-            f"`make {'openapi' if script == 'gen_openapi.py' else 'tag'}` manually.",
+            f"`make openapi` manually.",
             file=sys.stderr,
         )
 
@@ -157,7 +158,6 @@ def set_version(version: str) -> None:
     _set_code_declarations(version)
     _update_cargo_lock(version)
     _update_readme(version)
-    _regenerate("version_badge.py", "assets/badges/version.svg", f"v{version}")
     _regenerate("gen_openapi.py")
 
     print(f"✓ app version set to {version}")

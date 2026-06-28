@@ -3,16 +3,15 @@
 
 ## ── Release ──────────────────────────────────────────────────────────────
 
-# Maintainer-only release cut: commits the version badge to `main` and pushes
-# it, so it deliberately sets the ESTORMI_ALLOW_MAIN_PUSH escape hatch the
-# pre-push hook documents — the release tag is the one sanctioned direct push to
-# the otherwise PR-only `main`. Run it on `main`.
+# Maintainer-only release cut: creates the tag and pushes it to `main`, so it
+# deliberately sets the ESTORMI_ALLOW_MAIN_PUSH escape hatch the pre-push hook
+# documents — the release tag is the one sanctioned direct push to the otherwise
+# PR-only `main`. Run it on `main`. The README download badge is a live
+# shields.io endpoint that reads the latest GitHub release, so it tracks the tag
+# on its own — nothing to regenerate or commit here.
 tag: ## Tag and push a release: make tag V=v1.5 (CI builds + publishes the DMG)
 	@[ -n "$(V)" ] || (echo "Usage: make tag V=vX.Y"; exit 1)
 	@echo "Tagging $(V)…"
-	python3 scripts/version_badge.py assets/badges/version.svg $(V)
-	git add assets/badges/version.svg
-	git diff --cached --quiet || git commit -m "chore: update version badge to $(V)"
 	git tag $(V)
 	ESTORMI_ALLOW_MAIN_PUSH=1 git push && git push origin $(V)
 	@echo "✓ Tagged $(V) — the Release workflow will build and publish Estormi.dmg"

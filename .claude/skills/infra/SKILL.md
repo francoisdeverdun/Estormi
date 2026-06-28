@@ -63,7 +63,6 @@ half-finished work isn't swept into a `chore: pre-build sweep` commit.
 | `run_prompt.sh` | Bash | Runs companion prompts through Claude CLI | `make prompt-*` |
 | `weekly_report.sh` | Bash | Weekly prompt/report generation | Optional launchd |
 | `qa_metrics.py` | Python | Writes coverage + QA badges from coverage JSON | `make test-metrics`; CI `python-full` |
-| `version_badge.py` | Python | Writes SVG version badge | `make tag` |
 | `security_scan.py` | Python | Regex scan for personal identifiers, French mobile numbers, and short token-like secrets in staged/committed files | `security.yml`, manual |
 | `detect_secrets_gate.py` | Python | Pre-commit / CI secret detection gate | pre-commit, `security.yml` |
 | `gen_openapi.py` | Python | Regenerate `docs/specs/openapi.json` from the live FastAPI app; `--check` exits 1 if the committed spec is stale | `make openapi` / `openapi-check`, CI |

@@ -22,10 +22,12 @@ embeds ``estormi``'s own version, and a stale value (the 0.0.2 bump left it at
 0.0.1) fails every ``cargo --locked`` step — CI ``rust.yml`` and ``make
 lint-rust``. ``scripts/set_version.py`` now rewrites it with the four.
 
-It also pins the two *public-facing* version surfaces to ``__version__`` — the
-README "Latest build" line and the download badge — because both fell behind
-the four code declarations on the 0.0.2 bump. ``make set-version`` now rewrites
-all of them from one command (scripts/set_version.py).
+It also pins the *public-facing* README "Latest build" line to ``__version__``
+— it fell behind the four code declarations on the 0.0.2 bump. ``make
+set-version`` now rewrites it alongside them from one command
+(scripts/set_version.py). The README download badge is a live shields.io
+endpoint reading the latest GitHub release, so it tracks the tag with no
+committed literal to drift — nothing to pin here.
 
 Intentionally OUT of scope (independent version tracks):
   - root ``package.json`` (monorepo tooling version, not the app),
@@ -101,14 +103,6 @@ def _readme_latest_build_version() -> str:
     )
 
 
-def _version_badge_version() -> str:
-    # assets/badges/version.svg: aria-label="Download for macOS: v0.0.2"
-    return _regex_version(
-        REPO_ROOT / "assets" / "badges" / "version.svg",
-        r'aria-label="Download for macOS: v([0-9][0-9A-Za-z.\-]*)"',
-    )
-
-
 def test_macos_app_version_in_sync():
     versions = {
         "pyproject.toml ([project].version)": _pyproject_version(),
@@ -124,23 +118,23 @@ def test_macos_app_version_in_sync():
     )
 
 
-def test_readme_and_badge_track_app_version():
-    """README "Latest build" + the download badge must match ``__version__``.
+def test_readme_latest_build_tracks_app_version():
+    """README "Latest build" line must match ``__version__``.
 
-    These public surfaces fell behind the four code declarations on the 0.0.2
-    bump (the spec/badge/README were not regenerated). ``make set-version`` now
-    rewrites them together; this pins them so a future bump that forgets one
+    This public surface fell behind the four code declarations on the 0.0.2
+    bump (the spec/README were not regenerated). ``make set-version`` now
+    rewrites it alongside them; this pins it so a future bump that forgets it
     fails the gate instead of shipping a stale public version.
+
+    The download badge is not pinned here: it's a live shields.io endpoint
+    reading the latest GitHub release, so it tracks the tag without a committed
+    literal to drift.
     """
     app_version = _server_version()
-    surfaces = {
-        "README.md (Latest build line)": _readme_latest_build_version(),
-        "assets/badges/version.svg (download badge)": _version_badge_version(),
-    }
-    drift = {name: value for name, value in surfaces.items() if value != app_version}
-    assert not drift, (
-        f"public version surfaces drifted from estormi_server.__version__ "
-        f"({app_version}):\n" + "\n".join(f"  {name}: {value}" for name, value in drift.items())
+    readme_version = _readme_latest_build_version()
+    assert readme_version == app_version, (
+        f"README 'Latest build' line ({readme_version}) drifted from "
+        f"estormi_server.__version__ ({app_version})"
     )
 
 

@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/francoisdeverdun/Estormi/releases">
-    <img src="assets/badges/version.svg" alt="Download Estormi for macOS">
+  <a href="https://github.com/francoisdeverdun/Estormi/releases/latest">
+    <img src="https://img.shields.io/github/v/release/francoisdeverdun/Estormi?label=Download%20for%20macOS&labelColor=11100C&color=C49A3A&style=for-the-badge" alt="Download Estormi for macOS">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License">
