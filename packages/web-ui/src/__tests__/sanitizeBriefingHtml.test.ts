@@ -110,6 +110,19 @@ describe('sanitizeBriefingHtml — executable URL schemes cleared on URL_ATTRS',
     expect(el!.hasAttribute(attr)).toBe(false)
   })
 
+  // The scheme guard is an allowlist (http/https/mailto/tel), so it neutralises
+  // any other scheme — not just the two we used to name explicitly. vbscript:
+  // is the classic one a deny-list misses.
+  it.each([
+    ['href', '<a href="vbscript:msgbox(1)">x</a>', 'a'],
+    ['href', '<a href="VBScript:msgbox(1)">x</a>', 'a'],
+  ])('clears vbscript: in %s', (attr, html, sel) => {
+    const doc = parse(html)
+    const el = doc.querySelector(sel)
+    expect(el).not.toBeNull()
+    expect(el!.hasAttribute(attr)).toBe(false)
+  })
+
   it('clears a javascript: xlink:href on an SVG link', () => {
     const doc = parse(
       '<svg><a xlink:href="javascript:alert(1)"><text>x</text></a></svg>',

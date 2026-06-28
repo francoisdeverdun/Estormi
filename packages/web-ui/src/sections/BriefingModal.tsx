@@ -45,12 +45,36 @@ import {
 // URL-bearing attribute. Runs only in the DOM; SSR/tests without a document
 // fall back to stripping the dangerous tags textually.
 const DANGEROUS_TAGS = 'script, style, iframe, object, embed'
+const DANGEROUS_TAG_RE = /<\/?(?:script|style|iframe|object|embed)\b[^>]*>/gi
 // Attributes that can carry an executable URL scheme.
 const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'formaction', 'action'])
+// A URL-bearing attribute may name an explicit scheme (`scheme:rest`). Only
+// these inert schemes are allowed through; anything else with a scheme — and
+// crucially the executable ones (`javascript:`, `data:`, `vbscript:`) — is
+// dropped. Scheme-relative (`//host`) and path/fragment-relative values carry
+// no scheme and so are kept.
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel'])
+
+// Does a URL-bearing attribute value carry a scheme that isn't on the
+// allowlist? A bare `scheme:` prefix (letter then letters/digits/+-.) before
+// any `/?#` names a scheme; absent that, the value is relative and safe.
+function hasUnsafeUrlScheme(value: string): boolean {
+  const m = /^([a-z][a-z0-9+.-]*):/.exec(value)
+  return m !== null && !SAFE_URL_SCHEMES.has(m[1]!)
+}
 
 export function sanitizeBriefingHtml(html: string): string {
   if (typeof document === 'undefined') {
-    return html.replace(/<\/?(?:script|style|iframe|object|embed)\b[^>]*>/gi, '')
+    // SSR/test fallback with no DOM parser. A single pass is defeatable by
+    // nesting (`<scr<script>ipt>` reveals a fresh tag once the inner match is
+    // removed), so strip repeatedly until the output stops changing.
+    let prev
+    let out = html
+    do {
+      prev = out
+      out = out.replace(DANGEROUS_TAG_RE, '')
+    } while (out !== prev)
+    return out
   }
   const doc = new DOMParser().parseFromString(html, 'text/html')
   doc.querySelectorAll(DANGEROUS_TAGS).forEach((el) => el.remove())
@@ -59,15 +83,14 @@ export function sanitizeBriefingHtml(html: string): string {
       const name = attr.name.toLowerCase()
       // Strip control chars (and whitespace) anywhere in the value, not just
       // runs of ASCII space: a leading \x01 etc. would otherwise smuggle a
-      // `\x01javascript:` scheme past the startsWith() check (browsers ignore
+      // `\x01javascript:` scheme past the scheme check (browsers ignore
       // such leading junk when resolving the URL).
       // eslint-disable-next-line no-control-regex -- intentional: strip C0 control bytes so they can't smuggle a URL scheme
       const value = attr.value.replace(/[\u0000-\u0020]+/g, '').toLowerCase()
       if (
         name.startsWith('on') ||
         name === 'srcdoc' ||
-        (URL_ATTRS.has(name) &&
-          (value.startsWith('javascript:') || value.startsWith('data:')))
+        (URL_ATTRS.has(name) && hasUnsafeUrlScheme(value))
       ) {
         el.removeAttribute(attr.name)
       }

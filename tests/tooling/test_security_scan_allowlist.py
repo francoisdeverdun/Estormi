@@ -64,6 +64,31 @@ def test_owner_github_url_is_allowed(scan):
     assert _content_findings(scan, clone) == []
 
 
+def test_owner_shields_release_badge_is_allowed(scan):
+    """The canonical shields.io release badge for the repo passes _scan_content.
+
+    Both the README "Download for macOS" badge and the docs/release.md
+    reference embed ``img.shields.io/github/v/release/<owner>/Estormi`` — the
+    repo's public location, scheme-prefixed or bare — so neither must trip.
+    """
+    handle = scan._OWNER_HANDLE  # built by the scanner, never spelled literally here
+    badge_img = (
+        f'<img src="https://img.shields.io/github/v/release/{handle}/Estormi'
+        f'?label=Download%20for%20macOS&color=C49A3A" alt="Download Estormi">'
+    )
+    badge_bare = f"(`img.shields.io/github/v/release/{handle}/Estormi`) reads the latest tag"
+    assert _content_findings(scan, badge_img) == []
+    assert _content_findings(scan, badge_bare) == []
+
+
+def test_owner_shields_lookalike_is_still_flagged(scan):
+    """A shields path for a *different* owner/repo is not the canonical badge."""
+    handle = scan._OWNER_HANDLE
+    # Handle is present but not as the exact <handle>/Estormi badge segment.
+    assert _content_findings(scan, f"img.shields.io/github/v/release/{handle}-evil/Estormi")
+    assert _content_findings(scan, f"img.shields.io/github/v/release/{handle}/OtherRepo")
+
+
 def test_owner_name_outside_github_url_is_still_flagged(scan):
     """The owner handle anywhere but the allow-listed URL trips a marker."""
     handle = scan._OWNER_HANDLE

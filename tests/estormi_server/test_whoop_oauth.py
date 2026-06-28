@@ -9,6 +9,7 @@ the network, a real browser, or the keyring.
 from __future__ import annotations
 
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -113,7 +114,7 @@ async def test_auth_open_success_registers_state(client):
     assert r.status_code == 200
     body = r.json()
     assert body["opened"] is True
-    assert body["url"].startswith("https://api.prod.whoop.com")
+    assert urlsplit(body["url"]).hostname == "api.prod.whoop.com"
     # The minted state is registered so the callback can later validate it.
     assert body["state"] in whoop_oauth._OAUTH_STATES
     popen.assert_called_once()
