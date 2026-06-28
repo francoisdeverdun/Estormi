@@ -67,7 +67,7 @@ pub(super) async fn require_token(
         .get(WA_TOKEN_HEADER)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    if !token_ok(&expected, provided) {
+    if !token_ok(expected, provided) {
         return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
     }
     next.run(req).await

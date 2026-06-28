@@ -26,9 +26,15 @@ tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 anyhow = "1"
 
-# WhatsApp (Feature 11)
+# WhatsApp (Feature 11). The whatsapp-rust family — wacore plus the client and
+# its transport/http adapters — is tightly version-coupled: the transport's
+# TransportFactory impl is tied to a specific wacore. Keep these on one minor
+# (0.5) and bump them together. Dependabot moving only the transport to 0.6
+# (#29) split the tree across two wacore versions and broke the
+# TransportFactory trait bound; a 0.6 move needs the whole family + an API
+# migration (Event variants / type changes), tracked separately.
 whatsapp-rust = { version = "0.5.0", features = ["sqlite-storage"] }
-whatsapp-rust-tokio-transport = "0.6.0"
+whatsapp-rust-tokio-transport = "0.5.0"
 whatsapp-rust-ureq-http-client = "0.5.0"
 wacore = "0.5"
 axum = { version = "0.7", features = ["json"] }
