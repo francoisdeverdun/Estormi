@@ -1,7 +1,7 @@
 # Dev / contributor install. Loose `>=` floors — fresh `pip install -r` picks
 # compatible latest versions. The packaged macOS app uses exact pins in
 # `requirements-bundle.txt`; see pyproject.toml for the rationale.
-fastapi>=0.111.0
+fastapi>=0.138.1
 # Security floor: starlette < 1.3.0 carries GHSA-82w8-qh3p-5jfq /
 # GHSA-jp82-jpqv-5vv3. Pinned explicitly (it is otherwise transitive via
 # fastapi) so neither a dev install nor the lock can resolve a vulnerable build.
