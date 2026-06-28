@@ -73,7 +73,11 @@ jobs:
           workspaces: apps/estormi-macos -> target
 
       - name: Prepare bundled resource placeholders
-        run: mkdir -p python
+        # tauri.conf.json lists BOTH ../../python and ../../packages/web-ui/dist
+        # as bundle resources; tauri_build validates each path exists at compile
+        # time, so cargo fmt/clippy/test all need both present even though this
+        # job builds neither. Empty dirs satisfy the existence check.
+        run: mkdir -p python packages/web-ui/dist
 
       - name: Cargo format check
         working-directory: apps/estormi-macos
