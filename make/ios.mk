@@ -1,11 +1,18 @@
 # iOS app (apps/estormi-ios) — TestFlight / App Store distribution.
 #
+# TestFlight and the App Store are NOT separate builds: this target archives an
+# App-Store-signed binary and uploads it to App Store Connect. The SAME uploaded
+# build is what you install via TestFlight AND what you submit for App Store
+# review — the only difference is the App Store Connect console step (attach the
+# build to a version, fill metadata + privacy labels, submit for review). There
+# is no separate "App Store build" to produce here. `ios-release` is an alias.
+#
 # A TestFlight/App Store build resolves to the PRODUCTION CloudKit + APNs
 # environment (the iOS entitlements pin no `icloud-container-environment`, so
 # Xcode picks Development for Debug and Production for a Distribution archive) —
 # the only way to test the distributable CloudKit doorbell against a real device.
 # See docs/cloudkit-doorbell.md and docs/ios-push-notifications.md.
-.PHONY: ios-testflight
+.PHONY: ios-testflight ios-release
 
 # Inputs (all required; nothing team-specific is committed to source):
 #   APPLE_API_KEY_ID + APPLE_API_ISSUER + APPLE_API_KEY_PATH — the same App Store
@@ -18,7 +25,7 @@
 #     cloud-sign distribution assets ("Cloud signing permission error").
 IOS_PROVISION_PROFILE ?=
 
-ios-testflight: ## Archive + upload the iOS app to TestFlight (needs APPLE_API_* + APPLE_TEAM_ID + IOS_PROVISION_PROFILE)
+ios-testflight: ## Archive + upload to App Store Connect — same build serves TestFlight + App Store (needs APPLE_API_* + APPLE_TEAM_ID + IOS_PROVISION_PROFILE)
 	@if [ -z "$(APPLE_API_KEY_ID)" ] || [ -z "$(APPLE_API_ISSUER)" ] || [ -z "$(APPLE_API_KEY_PATH)" ]; then \
 	  echo "ios-testflight: set APPLE_API_KEY_ID + APPLE_API_ISSUER + APPLE_API_KEY_PATH (App Store Connect API key)."; exit 1; \
 	fi
@@ -58,4 +65,10 @@ ios-testflight: ## Archive + upload the iOS app to TestFlight (needs APPLE_API_*
 	  -exportPath build/export -exportOptionsPlist ExportOptions.plist \
 	  -authenticationKeyPath "$(APPLE_API_KEY_PATH)" -authenticationKeyID "$(APPLE_API_KEY_ID)" \
 	  -authenticationKeyIssuerID "$(APPLE_API_ISSUER)"
-	@echo "✓ ios-testflight: uploaded. After ASC processing it appears in TestFlight — add the build to an internal test group, then install via the TestFlight app."
+	@echo "✓ ios-testflight: uploaded to App Store Connect. After ASC processing the build serves BOTH paths:"
+	@echo "    • TestFlight — add it to a test group, install via the TestFlight app."
+	@echo "    • App Store  — attach it to an App Store version in ASC, fill metadata + privacy labels (Data Not Collected), then Submit for Review."
+
+# Alias: the App Store ships the exact same uploaded build as TestFlight (see the
+# header note), so `make ios-release` is just `ios-testflight` under a clearer name.
+ios-release: ios-testflight

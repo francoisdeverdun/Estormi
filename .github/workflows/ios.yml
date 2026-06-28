@@ -29,13 +29,23 @@ concurrency:
 jobs:
   ios-build:
     name: Build & test / iOS
-    # macos-14 ships a recent Xcode; xcode-select below pins the toolchain so
-    # the iOS SDK (project.yml targets iOS 26) and Simulator are available.
-    runs-on: macos-14
+    # project.yml targets iOS 26, whose SDK ships only with Xcode 26 — and
+    # Xcode 26 requires macOS 15+ to run, so macos-14 (Sonoma) cannot build it
+    # at all. Run on macos-15 and explicitly select the Xcode 26 toolchain
+    # below; without the select, xcodebuild may default to an older Xcode that
+    # cannot read the generated project ("Unable to read project").
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v6
+
+      # Pin the toolchain to the latest installed Xcode (26.x on macos-15),
+      # which provides the iOS 26 SDK that project.yml's deploymentTarget needs.
+      - name: Select Xcode 26 toolchain
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
       # xcodegen is the repo's documented project generator
       # (apps/estormi-ios/README.md: `brew install xcodegen`). It is preinstalled
