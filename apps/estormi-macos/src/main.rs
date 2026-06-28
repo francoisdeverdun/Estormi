@@ -348,13 +348,20 @@ fn main() {
             let health_url_nav = health_url(port);
             let root_url_nav = root_url(port);
             tauri::async_runtime::spawn(async move {
-                // Bounded timeout so a sidecar that accepts the connection but
-                // stalls on the response can't hang the startup poll forever.
+                // Per-request timeout so a single poll can't hang on a sidecar
+                // that accepts the connection but stalls on the response. The
+                // loop itself is UNBOUNDED on purpose: this is the only thing
+                // that moves the WebView off the bundled splash, so giving up
+                // would strand the user on the splash forever. A cold start can
+                // be delayed well past any fixed bound — e.g. behind a TCC
+                // "removable volume" prompt when the data dir is relocated to an
+                // external disk — so we keep polling until /health answers (the
+                // watchdog below restarts a sidecar that actually died).
                 let http_nav = reqwest::Client::builder()
                     .timeout(Duration::from_secs(5))
                     .build()
                     .unwrap_or_else(|_| reqwest::Client::new());
-                for _ in 0..100u8 {
+                loop {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                     let ok = http_nav
                         .get(&health_url_nav)

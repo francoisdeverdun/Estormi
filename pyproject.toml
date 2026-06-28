@@ -3,7 +3,7 @@ name = "estormi"
 # One of four version declarations (also packages/estormi_server/__init__.py,
 # apps/estormi-macos/Cargo.toml, apps/estormi-macos/tauri.conf.json); run
 # `make set-version V=…` to rewrite all four. Pinned by test_version_consistency.
-version = "0.0.2"
+version = "0.0.3"
 description = "Estormi: Ars Memoriae"
 requires-python = ">=3.12"
 readme = "README.md"

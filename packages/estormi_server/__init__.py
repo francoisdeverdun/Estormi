@@ -4,4 +4,4 @@
 # FastAPI app metadata (main.py) and the MCP ``initialize`` serverInfo response
 # (api/mcp_rpc.py). Keep in sync with pyproject.toml / apps/estormi-macos/Cargo.toml /
 # tauri.conf.json.
-__version__ = "0.0.2"
+__version__ = "0.0.3"

@@ -151,7 +151,7 @@ engines, and the layering live in
 ## ⬇️ Get Estormi
 
 > [!NOTE]
-> **Latest build — [Estormi v0.0.2](https://github.com/francoisdeverdun/Estormi/releases/latest).**
+> **Latest build — [Estormi v0.0.3](https://github.com/francoisdeverdun/Estormi/releases/latest).**
 > Download **`Estormi.dmg`** from the release, open it, and drag `Estormi.app`
 > to `/Applications`. Apple Silicon, macOS 13+.
 
@@ -205,7 +205,7 @@ the runtime in CI is impractical). Fill it from a clone of the source repo at th
 
 ```bash
 git clone https://github.com/francoisdeverdun/Estormi.git && cd Estormi
-git checkout v0.0.2          # the tag you downloaded
+git checkout v0.0.3          # the tag you downloaded
 make bundle-python           # downloads + verifies the pinned CPython runtime
 make bundle                  # → dist/Estormi.zip (turnkey app + install.sh)
 ```

@@ -1,6 +1,6 @@
 [package]
 name = "estormi"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "Apache-2.0"
 # No stable MSRV: this crate requires a NIGHTLY toolchain (a transitive dep uses

@@ -42,6 +42,16 @@ four declarations in sync (`tests/contract/test_version_consistency.py`).
   ignoring stray `.json` that previously caused phantom entries and
   manifest/delete errors.
 
+## [0.0.3] - 2026-06-28
+
+### Fixed
+- **macOS app no longer hangs on the splash** when the backend's cold start is
+  delayed past ~30s — e.g. behind the macOS *removable-volume* (TCC) prompt that
+  appears when the data directory is relocated to an external disk. The shell's
+  startup health poll that redirects the WebView off the bundled splash is now
+  unbounded instead of giving up after 100 attempts, so the app always lands on
+  the UI once the sidecar answers.
+
 ## [0.0.2] - 2026-06-21
 
 ### Added
@@ -113,6 +123,7 @@ app (`Estormi.app`) — distributed directly, so the published DMG is unsigned a
 not Apple-notarized — plus a read-only native iOS companion; see
 [`docs/release.md`](docs/release.md) for the build and packaging flow.
 
-[Unreleased]: https://github.com/francoisdeverdun/Estormi/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/francoisdeverdun/Estormi/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/francoisdeverdun/Estormi/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/francoisdeverdun/Estormi/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/francoisdeverdun/Estormi/releases/tag/v0.0.1
