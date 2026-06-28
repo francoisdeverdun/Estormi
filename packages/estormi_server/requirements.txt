@@ -10,7 +10,7 @@ uvicorn[standard]>=0.30.0
 httpx>=0.27.0
 qdrant-client[local]>=1.11.0
 fastembed>=0.8.0
-aiosqlite>=0.20.0
+aiosqlite>=0.22.1
 # Floor form (matches the other deps); bounded <4 because APScheduler 4.x is an
 # API-breaking rewrite. Canonical casing mirrors requirements-bundle.txt.
 APScheduler>=3.10.4,<4
