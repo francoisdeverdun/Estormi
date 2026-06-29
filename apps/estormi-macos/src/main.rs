@@ -105,6 +105,11 @@ fn main() {
             // un-hide it by writing "0" to dock-hidden.flag; honour that
             // here so the setting survives across launches.
             let dock_hidden = dock_hidden_flag(&app.handle().clone());
+            // macOS-only: ActivationPolicy / set_activation_policy don't exist
+            // on other targets (the Rust CI job cross-compiles this macOS app on
+            // Linux). `dock_hidden` itself still drives initial window
+            // visibility below on every platform.
+            #[cfg(target_os = "macos")]
             if dock_hidden {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
