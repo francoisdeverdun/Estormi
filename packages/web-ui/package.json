@@ -31,7 +31,7 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^4.1.9",
-    "eslint": "^10.6.0",
+    "eslint": "^9.39.4",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^17.7.0",
