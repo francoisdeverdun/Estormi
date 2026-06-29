@@ -2,8 +2,12 @@ use tauri::{
     image::Image,
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    ActivationPolicy, AppHandle, Manager,
+    AppHandle, Manager,
 };
+// macOS-only: the dock/activation-policy API doesn't exist on the Linux target
+// the Rust CI job cross-compiles on.
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 
 fn open_estormi(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(crate::MAIN_WINDOW_LABEL) {
@@ -91,13 +95,17 @@ pub fn create_tray(app: &tauri::App) -> tauri::Result<()> {
                 // muda flipped the check state before firing this event, so
                 // is_checked() already reflects the new desired state.
                 let hide = dock_toggle_for_event.is_checked().unwrap_or(false);
-                let policy = if hide {
-                    ActivationPolicy::Accessory
-                } else {
-                    ActivationPolicy::Regular
-                };
-                if let Err(e) = app.set_activation_policy(policy) {
-                    eprintln!("estormi-tray: failed to set activation policy: {e}");
+                // macOS-only: dock show/hide via the activation policy.
+                #[cfg(target_os = "macos")]
+                {
+                    let policy = if hide {
+                        ActivationPolicy::Accessory
+                    } else {
+                        ActivationPolicy::Regular
+                    };
+                    if let Err(e) = app.set_activation_policy(policy) {
+                        eprintln!("estormi-tray: failed to set activation policy: {e}");
+                    }
                 }
                 if let Err(e) = crate::set_dock_hidden_flag(app, hide) {
                     eprintln!("estormi-tray: failed to persist dock-hidden flag: {e}");
