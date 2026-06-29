@@ -1,0 +1,49 @@
+# cargo-audit configuration.
+#
+# All entries below are "no longer maintained" / soundness warnings on
+# crates pulled in transitively by Tauri 2 (the macOS app shell). Estormi
+# ships only on macOS, and none of these crates are reachable from a code
+# path Estormi exercises — the GTK3 chain is Linux-only, the unic-*
+# crates ship with syn 2 macros that we don't extend, and the rand /
+# glib soundness paths require a custom logger or the unsound
+# Linux-iterator path respectively.
+#
+# Whenever Tauri bumps and one of these drops out of the dependency tree,
+# trim the corresponding line. Run `cargo audit` to refresh.
+
+[advisories]
+ignore = [
+    # gtk-rs (GTK3) — Linux-only, not loaded on macOS.
+    "RUSTSEC-2024-0411", # gdkwayland-sys
+    "RUSTSEC-2024-0412", # gdk
+    "RUSTSEC-2024-0413", # atk
+    "RUSTSEC-2024-0414", # gdkx11-sys
+    "RUSTSEC-2024-0415", # gtk
+    "RUSTSEC-2024-0416", # atk-sys
+    "RUSTSEC-2024-0417", # gdkx11
+    "RUSTSEC-2024-0418", # gdk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+    "RUSTSEC-2024-0420", # gtk-sys
+    # glib VariantStrIter unsoundness — Linux/GTK iterator path, unreachable
+    # on macOS where Tauri uses WKWebView, not GTK.
+    "RUSTSEC-2024-0429", # glib
+    # Macro / utility crates pulled in by Tauri's codegen and tree-sitter
+    # parsers. No call site in Estormi extends or overrides them.
+    "RUSTSEC-2024-0370", # proc-macro-error (replaced by proc-macro-error2 upstream)
+    "RUSTSEC-2025-0057", # fxhash (replaced by rustc-hash / ahash upstream)
+    "RUSTSEC-2025-0075", # unic-char-range
+    "RUSTSEC-2025-0080", # unic-common
+    "RUSTSEC-2025-0081", # unic-char-property
+    "RUSTSEC-2025-0098", # unic-ucd-version
+    "RUSTSEC-2025-0100", # unic-ucd-ident
+    "RUSTSEC-2025-0141", # bincode (Tauri IPC layer; replaced by bincode 2 upstream)
+    # rand custom-logger unsoundness — Estormi installs no custom logger,
+    # so the affected code path is unreachable.
+    "RUSTSEC-2026-0097", # rand
+    # diesel 2.3.8 unsoundness — diesel is pulled in transitively by Tauri 2;
+    # Estormi does not use diesel directly and the unsound code path requires
+    # constructing a custom Queryable impl, which we do not do.
+    # Review deadline: 2026-09-01 — revisit if Tauri bumps diesel or a fix
+    # release lands (diesel >= 2.4.0 expected to resolve this).
+    "RUSTSEC-2026-0172", # diesel
+]

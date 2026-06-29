@@ -1,0 +1,177 @@
+name: Security
+
+# Security scans (security_scan, detect-secrets, bandit, pip-audit, TruffleHog
+# history scan). We run them:
+#   - on every pull request (gate: a secret/CVE introduced in a PR must not
+#     reach main),
+#   - on push to main when a security-relevant file changes (fast feedback),
+#   - nightly on a schedule (catches drift in transitive deps + new CVEs),
+#   - manually via workflow_dispatch.
+# Per-PR correctness checks live in test.yml (lint + tests) and rust.yml / js.yml.
+
+on:
+  pull_request:
+    # No paths filter — every PR runs the gates. A secret in a YAML file or a
+    # markdown doc is just as bad as one in a Python file.
+  push:
+    branches: [main]
+    paths:
+      - 'packages/estormi_server/requirements.txt'
+      - 'tests/requirements-test.txt'
+      - 'requirements/requirements-bundle.txt'
+      - 'requirements/requirements.lock'
+      - 'scripts/security_scan.py'
+      - 'scripts/detect_secrets_gate.py'
+      - '.github/workflows/security.yml'
+  schedule:
+    # 04:17 UTC daily — off-peak, avoids the top-of-hour scheduler stampede.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  python-security:
+    name: Security / Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install security dependencies
+        run: |
+          pip install bandit==1.8.3 pip-audit==2.9.0 detect-secrets==1.5.0
+
+      - name: Repository security scan
+        run: python scripts/security_scan.py --include-untracked
+
+      - name: Detect secrets baseline gate
+        run: python scripts/detect_secrets_gate.py
+
+      - name: Bandit
+        run: bandit -r packages scripts -lll
+
+      # GHSA-w8v5-vhqr-4h9v (diskcache 5.6.3): the only vulnerability pip-audit
+      # currently reports across the runtime, bundled, and locked dependency
+      # sets. diskcache has published NO fixed release, so it cannot be patched
+      # by a bump — suppressed here (the same ignore `make audit-deps` carries
+      # locally). Remove the ignore once diskcache ships a fix. The test-only
+      # requirements are not affected and run without an ignore.
+      #
+      # REVIEW BY 2026-12-01: the guard step below fails the job once this date
+      # passes so the suppression cannot rot silently. When you revisit, either
+      # drop the --ignore-vuln flags (if fixed) or bump this date with a note.
+      - name: Guard — CVE suppression review deadline
+        env:
+          REVIEW_BY: "2026-12-01"
+        run: |
+          today="$(date -u +%F)"
+          if [ "$today" \> "$REVIEW_BY" ]; then
+            echo "::error::GHSA-w8v5-vhqr-4h9v (diskcache) suppression is past its review deadline ($REVIEW_BY)." \
+                 "Revisit the --ignore-vuln flags in .github/workflows/security.yml."
+            exit 1
+          fi
+          echo "GHSA-w8v5-vhqr-4h9v (diskcache) suppression review deadline: $REVIEW_BY (today: $today) — OK."
+
+      - name: pip-audit runtime dependencies
+        run: pip-audit -r packages/estormi_server/requirements.txt --ignore-vuln GHSA-w8v5-vhqr-4h9v
+
+      # requirements/requirements-bundle.txt is fully ==-pinned (every transitive dep
+      # included). --no-deps --disable-pip audits those pinned versions directly
+      # and skips pip's resolution venv entirely; without --disable-pip,
+      # pip-audit still runs `pip install` and tries to build the macOS-only
+      # pyobjc wheels, which fails on the Linux runner ("PyObjC requires macOS
+      # to build"). Keep every line in this file pinned or --no-deps drops it.
+      - name: pip-audit bundled dependencies
+        run: pip-audit --no-deps --disable-pip -r requirements/requirements-bundle.txt --ignore-vuln GHSA-w8v5-vhqr-4h9v
+
+      - name: pip-audit test dependencies
+        run: pip-audit -r tests/requirements-test.txt
+
+      # requirements/requirements.lock is the fully ==-pinned, hashed closure CI installs from
+      # (make lock). Audit the exact pinned versions directly — same --no-deps
+      # --disable-pip pattern as the bundle so pip-audit never tries to build a
+      # platform-specific wheel on the Linux runner.
+      - name: pip-audit locked dependencies
+        run: pip-audit --no-deps --disable-pip -r requirements/requirements.lock --ignore-vuln GHSA-w8v5-vhqr-4h9v
+
+  history-authorship:
+    name: Security / Git history authorship
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Full history — `git log --all` must see every commit, not a shallow
+      # tip, to catch a corporate-style author/committer email baked into the
+      # metadata (a leak the working-tree scan cannot see).
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Git history authorship scan
+        run: python scripts/security_scan.py --history
+
+  secrets-trufflehog:
+    name: Security / TruffleHog
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan git history for secrets (gating)
+        # Gate on verified + unknown only. `unverified` findings are credential-
+        # shaped strings TruffleHog could not actively check (no live verifier,
+        # or the verifier was unreachable); including them here spuriously fails
+        # PRs from external contributors. Deep `unverified` coverage runs in the
+        # non-gating job below.
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:3.95.0 \
+            git file:///repo \
+            --no-update \
+            --results verified,unknown \
+            --fail
+
+  secrets-trufflehog-deep:
+    name: Security / TruffleHog (deep, non-gating)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only on the nightly schedule / manual dispatch — never gates a PR.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan git history for secrets (including unverified)
+        # Surfaces `unverified` findings for human review without failing the
+        # build; continue-on-error keeps the result visible but non-blocking.
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:3.95.0 \
+            git file:///repo \
+            --no-update \
+            --results verified,unknown,unverified \
+            --fail

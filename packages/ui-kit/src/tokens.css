@@ -1,0 +1,240 @@
+/*
+ * Estormi — Ars Memoriae
+ * Design tokens (ink + gold, single dark theme).
+ *
+ * Mirrors the canonical palette from the design bundle. Anything visual in
+ * the app should reference these custom properties rather than hard-coding
+ * hex values, so theming and contrast can be tuned in one place.
+ *
+ * Token groups:
+ *   - surface (encre/charbon)            background gradients
+ *   - gold (or-* + gilt-line-*)          chrome / borders / accents
+ *   - accent (pourpre/enluminure/...)    state colours (running, error, info)
+ *   - ink (parchemin + ink-dim/dimmer)   text colours
+ *   - typography                         font stacks
+ */
+:root {
+  /* ── Surface ────────────────────────────────────────────────────────── */
+  --encre: #0d1117;
+  --charbon: #1a1f29;
+  --charbon-3: #2e3441;
+  /* Intermediate stops for full-bleed background radials (slightly lighter
+     than --encre, between --charbon and --encre) — the splash and app-frame
+     grounds. */
+  --encre-haut: #14181f;
+  --encre-mi: #11141b;
+
+  /* ── Gold (chrome / borders) ────────────────────────────────────────── */
+  --or-ancien: #c8a96b;
+  --or-clair: #dcba8a;
+  --or-sombre: #8a7142;
+  /* Vivid gold — the "running" pulse on source rows; brighter than --or-clair. */
+  --or-vif: #e6c34a;
+  --gilt-line: rgba(200, 169, 107, 0.22);
+  --gilt-line-strong: rgba(200, 169, 107, 0.45);
+  /* Vertical gilt sheen for hairline rules / accent bars (light → deep gold). */
+  --gilt-gradient: linear-gradient(180deg, #f5e2a8 0%, #e6cb8c 35%, #c8a467 60%, #8a6a30 100%);
+  /* Brass-disc stops for the GoldToggle knob — a self-contained gilt sheen,
+     lighter than --gilt-gradient (bright highlight → mid gold for ON, deep
+     gold → dark for OFF). */
+  --brass-bright: #f5e2a8;
+  --brass-mid: #c8a467;
+  --brass-deep: #8a6a30;
+  --brass-dark: #5a4520;
+
+  /* ── Ink (text on dark) ─────────────────────────────────────────────── */
+  --parchemin: #f5f1e8;
+  --parchemin-os: #faf8f4;
+  --ink-dim: rgba(245, 241, 232, 0.62);
+  --ink-dimmer: rgba(245, 241, 232, 0.38);
+
+  /* ── Accents ─────────────────────────────────────────────────────────── */
+  --pourpre: #b82e2e;
+  --pourpre-clair: #b83a57;
+  --pourpre-fonce: #6a1818;
+  /* Muted brown-red — border of the warning encart in the gcal setup guide;
+     softer/greyer than --pourpre-fonce so it frames a caution note rather
+     than reads as destructive. */
+  --pourpre-doux: #6b3a3a;
+  /* Neutral error / warning red — softer than --pourpre so it reads as
+     "this control surfaces an error" rather than "destructive action".
+     Replaces hardcoded #d97b7b across components and pages. */
+  --rouge-clair: #d97b7b;
+  /* Info state. --enluminure is consumed by the iOS surface (gen_tokens_swift.py
+     maps it to EstormiColor.enluminure, used by Fleuron/Brand) — not "dead"
+     because the web SPA only references --enluminure-clair. Keep both. */
+  --enluminure: #1e3a5f;
+  --enluminure-clair: #4264ba;
+  --vert-sauge: #6b8a5f;
+  /* Deep sage — the "downloaded / cached" accent; dimmer than --vert-sauge. */
+  --vert-sauge-sombre: #5a7a52;
+
+  /* ── Brand grounds ──────────────────────────────────────────────────────
+     The illuminated-initial logo sits on a coloured ground — deliberately NOT
+     the charbon background, so the mark reads as a device laid on top rather
+     than melting in. Gold-on-burgundy is the house pairing (mirrors
+     EstormiBrand in apps/estormi-ios/Sources/Design/Brand.swift). Reserved for
+     the logo mark / app icon — never a page background. */
+  --brand-burgundy: #6e1f2e;
+
+  /* Subtle background noise tints (used in body::before radials below) */
+  --noise-pourpre: rgba(184, 46, 46, 0.04);
+  --noise-or: rgba(200, 169, 107, 0.035);
+  --noise-enlum: rgba(66, 100, 186, 0.04);
+
+  /* ── Scrims (full-screen modal backdrops) ───────────────────────────────
+     The dimmed ground behind a modal. Two intensities: the standard near-
+     opaque scrim for the source/ext shells, and a slightly lighter one for
+     the base Modal. The neutral-black scrim is the plain backdrop variant. */
+  --scrim-modal: rgba(8, 6, 12, 0.88);
+  --scrim-modal-soft: rgba(8, 6, 12, 0.78);
+  --scrim-backdrop: rgba(0, 0, 0, 0.7);
+  --scrim-backdrop-soft: rgba(0, 0, 0, 0.65);
+
+  /* ── Shadow inks (the colour part of box-shadow) ─────────────────────────
+     Tokenise the rgba() ink only; each call site keeps its own offset/blur.
+     -modal is the deep drop under floating modals, -soft the mid drop under
+     smaller modals/popovers, -faint the subtle lift under chips/knobs and the
+     hairline text stroke on the cardinal counters. */
+  --shadow-modal: rgba(0, 0, 0, 0.7);
+  --shadow-soft: rgba(0, 0, 0, 0.6);
+  --shadow-faint: rgba(0, 0, 0, 0.4);
+
+  /* ── Recessed wells (dark inset panel/input grounds) ─────────────────────
+     A scale of translucent-black insets that read as "sunk into the page",
+     ordered light → deep. Used for list rows, input wells, code blocks and
+     recessed cards. Named by depth, not by alpha. */
+  --well-faint: rgba(0, 0, 0, 0.18);
+  --well-dim: rgba(0, 0, 0, 0.2);
+  --well-mid: rgba(0, 0, 0, 0.22);
+  --well-sunk: rgba(0, 0, 0, 0.25);
+  --well-deep: rgba(0, 0, 0, 0.3);
+  --well-deeper: rgba(0, 0, 0, 0.32);
+  --well-deepest: rgba(0, 0, 0, 0.35);
+
+  /* ── Gilt overlays (gold hover/active tints on dark) ─────────────────────
+     Faint gold washes laid over rows/cells on hover or when active. The hue
+     varies slightly per call site (the gold family is not one hex); keep the
+     two recurring tints. */
+  --overlay-gilt: rgba(200, 164, 103, 0.06);
+  --overlay-gilt-strong: rgba(200, 164, 103, 0.12);
+  --overlay-gilt-warm: rgba(196, 154, 58, 0.1);
+
+  /* ── Pourpre overlays (soft warning/error washes on dark) ────────────────
+     Muted red tints behind error encarts / warning rows; mirrors the gilt
+     overlays for the pourpre side of the palette. */
+  --overlay-pourpre: rgba(216, 123, 123, 0.06);
+
+  /* ── Corner radii (mirror EstormiMetric in apps/estormi-ios Tokens.swift:
+     panels/cards/modals use the panel radius, chips/tiles/buttons the tight
+     one — the iOS rounded-corner vocabulary, shared so both surfaces read
+     the same). ─────────────────────────────────────────────────────────── */
+  --radius-panel: 12px;
+  --radius-tight: 4px;
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --font-display: 'Cinzel', 'Cinzel Decorative', 'Times New Roman', serif;
+  --font-body: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* The app is dark-only by design contract — the data-theme attribute is set
+ * by main.tsx for symmetry with the prototype, but no light theme exists. */
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--encre);
+  color: var(--parchemin);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 12% 18%, var(--noise-or) 0%, transparent 25%),
+    radial-gradient(circle at 88% 82%, var(--noise-pourpre) 0%, transparent 30%),
+    radial-gradient(circle at 50% 50%, var(--noise-enlum) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--or-ancien);
+  color: var(--encre);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--encre);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--charbon-3);
+  border: 2px solid var(--encre);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--or-sombre);
+}
+
+/* Live-indicator pulse (used by SystemStatus LiveDot) */
+@keyframes estormi-live-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Running-stage blink (procession nodes: ProcessionNode, BriefingAtelier) */
+@keyframes estormi-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

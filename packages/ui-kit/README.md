@@ -1,0 +1,147 @@
+# @estormi/ui-kit
+
+Estormi — Ars Memoriae — design system. Ink + gold, single dark theme.
+
+This package is the **only** place visual primitives live. The web-ui SPA and
+the native iOS briefing web view (which bundles `briefing.css` from here) both
+consume from it. Nothing else in the monorepo should re-define fonts, palette,
+ornaments, or layout primitives.
+
+## When to work here
+
+- Adding a new visual primitive (mark, ornament, panel, button, state).
+- Changing a colour, font family, or spacing scale.
+- Adding a Vitest test that covers a primitive's behaviour or accessibility.
+
+## When NOT to work here
+
+- Page composition → `packages/web-ui/src/sections/`.
+- Page-specific layouts → `packages/web-ui/src/components/`.
+- Hooks / API calls → `packages/web-ui/src/api/`.
+- Anything that fetches data or talks to a server.
+
+## Layout
+
+```
+src/
+  tokens.css                 CSS custom properties (canonical palette)
+  index.ts                   public barrel — only export from this file
+  components/
+    marks.tsx                Fleuron, Diamond
+    LogoMark.tsx             EstormiLogoMark (blocked illuminated initial —
+                             logo, masthead AND in-content lettrine)
+    Masthead.tsx             EstormiMasthead, IlluminatedRule
+    SectionHeader.tsx        Section title row (lettrine + gradient gold H2)
+    GildedPanel.tsx          Canonical card
+    buttons.tsx              PrimaryAction, GhostAction
+    GoldToggle.tsx           GoldToggle (gilded on/off switch)
+    Switch.tsx               Switch (labelled GoldToggle)
+    fields.tsx               TextInput, Textarea, Select, Field
+    states.tsx               Empty / Loading / Error
+  __tests__/                 Vitest unit tests
+```
+
+## Conventions
+
+- Every component is a function component, takes typed props.
+- No internal state unless visually necessary (e.g. hover styling).
+- Every public type is exported alongside the component (e.g.
+  `EstormiLogoMarkProps`).
+- Every visual constant comes from `tokens.css` via `var(--...)`. Hard-coded
+  hex values are allowed only in SVG paths where CSS variables can't reach.
+- SVG-only marks set `aria-hidden="true"`. Marks that carry meaning (e.g.
+  `EstormiLogoMark`) set `role="img"` and `aria-label`.
+- React 18, TypeScript strict, no class components.
+
+## Ground rules — form controls & buttons
+
+One vocabulary, applied everywhere, so the whole SPA reads as one surface.
+Never style a raw `<select>` / `<input>` / `<textarea>` / checkbox inline —
+reach for the primitive.
+
+**Inputs.** Use `TextInput`, `Textarea`, and `Select` for every editable
+control. They own the *chrome* — recessed `--well-deeper` ground, `--gilt-line`
+border that brightens to `--or-ancien` with a faint gold glow on focus,
+`--radius-tight` corners, and a `disabled` state that dims to `opacity: 0.45`.
+`Select` resets the native arrow and draws a gilt chevron; its layout `style`
+(flex / minWidth) lands on the wrapper. Callers own *typography*: pass `style`
+to swap the font (EB Garamond for prose, Inter for free text) — the frame is
+fixed, the content font is yours.
+
+**Toggles.** A boolean setting with a name uses `Switch` (a labelled
+`GoldToggle`) — never a checkbox. When a toggle gates another control, pass
+that control `disabled` so it greys itself out, and give the `Switch`
+`dimWhenOff` so the label dims too. Both halves go quiet together.
+
+**Buttons — three tones, one rule each.**
+
+| Tone        | Component                  | Use for                                   |
+| ----------- | -------------------------- | ----------------------------------------- |
+| Hero        | `PrimaryAction` (filled gold) | the **one** action to run on a panel (Run, Distill, Save) |
+| Secondary   | `GhostAction` (gilt outline) | everything else affirmative / neutral   |
+| Destructive | `GhostAction tone="danger"` (red contour) | delete / reset / disconnect / wipe |
+
+The hero is a **filled gold leaf** — the gilt fill marks it as *the* action to
+run. Destructive actions are **always** the red contour; there is **no filled
+red button**, and a destructive confirmation (the `Modal` reset dialog) uses a
+red-contour confirm too — never a gold one. Burgundy / pourpre is no longer a
+button fill at all: it is reserved for the brand mark, the `GoldToggle` on-state,
+and error/destructive *accents*. At most one `PrimaryAction` per surface; if a
+panel has no obvious hero, every button is a `GhostAction`.
+
+The label is a Cinzel small-caps eyebrow in `--or-ancien` (use `Field` to stack
+label + hint + control). Build forms from these and they match by construction.
+
+## Theme
+
+The app is **dark-only**. `tokens.css` declares `data-theme='dark'` and there
+is no light-theme variant. If a future spec needs light theme, add a sibling
+block under `:root[data-theme='light']` — never invent a second token file.
+
+## Fonts
+
+The `@font-face` rules live in
+`assets/fonts/fonts.css` (generated by
+`scripts/vendor_fonts.py`) and reference vendored `.woff2` binaries in
+the same directory. The SPA loads them via a single
+`<link rel="stylesheet" href="/fonts/fonts.css">` in
+`packages/web-ui/index.html`; FastAPI serves both the CSS and the
+binaries from the `/fonts` mount registered in
+`packages/estormi_server/server/static.py`. **Do not** re-declare `@font-face` in
+`packages/ui-kit/src/tokens.css` — `tokens.css` owns the font-family
+custom properties (`--font-display`, `--font-body`, `--font-ui`,
+`--font-mono`); the vendored sheet owns the actual font loading. This
+split keeps `tokens.css` synchronously small and lets a future native
+shell swap loading mechanisms without touching the design tokens.
+
+| Stack       | Family                               | Used for                  |
+| ----------- | ------------------------------------ | ------------------------- |
+| display     | Cinzel / Cinzel Decorative           | titles, eyebrows, buttons |
+| body        | EB Garamond                          | long-form copy            |
+| ui          | Inter                                | UI controls, body text    |
+| mono        | JetBrains Mono                       | numbers, timestamps, logs |
+
+## Running tests
+
+```bash
+pnpm --filter @estormi/ui-kit test          # one-shot
+pnpm --filter @estormi/ui-kit test:watch    # watch
+pnpm --filter @estormi/ui-kit typecheck     # tsc --noEmit
+```
+
+## Adding a primitive
+
+1. Drop the component in `src/components/<Name>.tsx`.
+2. Export it from `src/index.ts` (sorted by section, group with siblings).
+3. Add a Vitest in `src/__tests__/<Name>.test.tsx` covering at minimum:
+   render, accessible role/label, any boolean-prop branches.
+4. If the component introduces a new colour, **add it to `tokens.css` first**,
+   then reference it via `var(--...)`. There is no JS token API — `index.ts`
+   exports components only.
+
+## Do not
+
+- ❌ Add a state-management library, router, or data-fetching dependency.
+- ❌ Import from `@estormi/web-ui` or any app — ui-kit is the leaf.
+- ❌ Hard-code colours outside `tokens.css`.
+- ❌ Add components that aren't reusable in at least two pages.

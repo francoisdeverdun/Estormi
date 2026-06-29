@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "connectors"
+version = "1.0.0"
+description = "Estormi connectors: per-source ingestion adapters + ConnectorRegistry."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in estormi_server/requirements.txt (single
+# source of truth for the desktop bundle); intentionally not duplicated here so
+# editable installs don't fight the bundle's pin set. Mirrors memory_core.
+dependencies = []
+
+# The package directory IS the pyproject directory (connectors/), so
+# map the `connectors` import name to `.` rather than the default src-layout
+# that would look for a nested connectors/ subdir.
+[tool.setuptools]
+packages = ["connectors"]
+
+[tool.setuptools.package-dir]
+connectors = "."

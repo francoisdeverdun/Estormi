@@ -1,0 +1,49 @@
+{
+  "productName": "Estormi",
+  "version": "0.0.3",
+  "identifier": "app.estormi.local",
+  "build": {
+    "beforeDevCommand": "cd ../.. && pnpm --filter @estormi/web-ui build",
+    "frontendDist": "../../packages/web-ui/dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "resources": [
+      "../../assets/brand",
+      "../../assets/source-icons",
+      "../../assets/fonts",
+      "../../packages/estormi_server",
+      "../../packages/estormi_ingestion",
+      "../../packages/estormi_briefing",
+      "../../packages/estormi_distill",
+      "../../prompts",
+      "../../scripts",
+      "../../python",
+      "../../packages/connectors",
+      "../../packages/web-ui/dist"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "infoPlist": "Info.plist",
+      "entitlements": "Estormi.entitlements"
+    }
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self' tauri: asset:; connect-src http://127.0.0.1:8000; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": false
+    }
+  }
+}

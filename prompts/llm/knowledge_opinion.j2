@@ -1,0 +1,20 @@
+You are extracting ideas from a video transcript.
+You are preparing a personal daily topic-watch note.
+From the video transcript of {{ source_label }}, extract 3 to 5 distinct ideas or
+arguments from the speaker(s), each tagged with a "kind" (the JSON field defined
+in the rules below):
+- kind="insight": an idea, position or argument attributable to the speaker.
+- kind="concept": an interesting concept, mental framework or framing.
+- kind="prediction": an explicit anticipation made by the speaker.
+Never soften the speaker's point: if the speaker is provocative, preserve the meaning.
+Each line must clearly indicate that the idea comes from the speaker, without presenting it as an established fact.
+If the speakers are not clearly identifiable, attribute the idea to 'the speaker'.
+Each item must help the user think, decide or remember a strong position later.
+Ignore isolated facts, unless they are needed to understand the argument.
+
+{{ common_rules }}
+
+Transcript between delimiters:
+<transcript>
+{{ text }}
+</transcript>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- APNs entitlement. `development` is correct for builds run from Xcode
+	     (sandbox APNs); Xcode rewrites it to `production` when archiving for
+	     TestFlight / the App Store. Requires the Apple Developer Program. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- CloudKit doorbell (Option B — CloudKitDoorbell). The container is
+	     shared with the Mac helper (apps/estormi-cloud): the helper writes
+	     a Briefing record into the user's private database, the subscription
+	     saved by this app makes Apple deliver the banner. Debug installs talk
+	     to the container's Development environment, TestFlight/App Store
+	     builds to Production — the Mac helper must match (see
+	     docs/cloudkit-doorbell.md). -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.app.estormi.ios</string>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,133 @@
+name: Estormi
+options:
+  bundleIdPrefix: app.estormi
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "3"
+    # No DEVELOPMENT_TEAM committed: each developer sets their own team in
+    # Xcode (Signing & Capabilities) or via a gitignored local xcconfig.
+    # Automatic signing picks it up; this keeps the public repo team-agnostic.
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Estormi:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Sources
+        excludes:
+          - "Estormi.entitlements"
+      # (Fonts + Assets.xcassets need no entry here: they live under Sources/
+      # and XcodeGen auto-detects them as resources.)
+      # The ONE canonical briefing stylesheet, shared verbatim with the web-ui
+      # macOS renderer. Referenced in place (no copy) so the two surfaces can
+      # never drift; BriefingHTMLView loads it from the bundle and injects it.
+      - path: ../../packages/ui-kit/src/briefing.css
+        buildPhase: resources
+    # project.yml is the single source of truth for the Info.plist: XcodeGen
+    # generates it from these properties at `path` on every `xcodegen generate`.
+    # The output lives under the gitignored build/ dir so no generated plist is
+    # ever committed (there is no checked-in Sources/Info.plist to drift from).
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleDisplayName: Estormi
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Export compliance: the app uses only Apple-provided, exempt encryption
+        # (standard HTTPS/TLS via iCloud Drive sync, APNs and CloudKit) and ships
+        # no proprietary/non-standard cryptography. Declaring this up front keeps
+        # App Store Connect from holding every build in "Missing Compliance"
+        # waiting on the per-upload encryption questionnaire. Do NOT set true —
+        # that would (wrongly) commit to annual self-classification/CCATS filing.
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: LaunchScreenBackground
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIAppFonts:
+          - Cinzel-Regular.ttf
+          - EBGaramond-Regular.ttf
+          - EBGaramond-Italic.ttf
+        # `remote-notification` lets APNs alerts (pushed by the Mac when a new
+        # briefing is ready — see RemotePushRegistrar) wake the app. `audio`
+        # keeps the briefing narration playing once the screen locks or the app
+        # backgrounds (BriefingAudioPlayer drives the lock-screen Now Playing).
+        UIBackgroundModes:
+          - remote-notification
+          - audio
+        NSHumanReadableCopyright: "© 2026 Estormi"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.estormi.ios
+        # APNs entitlement (Push Notifications capability). Needs the Apple
+        # Developer Program — see docs/ios-push-notifications.md.
+        CODE_SIGN_ENTITLEMENTS: Sources/Estormi.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+  EstormiTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Estormi
+    settings:
+      base:
+        # Simulator unit tests need no signing identity or team.
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+
+  EstormiUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Estormi
+    settings:
+      base:
+        # Simulator UI tests need no signing identity or team (matches
+        # EstormiTests). The runner is installed into the booted sim only.
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: YES
+        # The target this UI-test bundle automates (XcodeGen wires the
+        # TEST_TARGET_NAME/host so XCUIApplication() launches the app).
+        TEST_TARGET_NAME: Estormi
+
+schemes:
+  Estormi:
+    build:
+      targets:
+        Estormi: all
+        EstormiTests: [test]
+        EstormiUITests: [test]
+    test:
+      targets:
+        - EstormiTests
+        - EstormiUITests
+      gatherCoverageData: false

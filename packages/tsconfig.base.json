@@ -1,0 +1,21 @@
+{
+  // Shared TypeScript compiler options for the JS workspace (ui-kit, web-ui).
+  // Each package extends this and adds only its own include path. The
+  // unused-locals/parameters guards live here so both packages inherit them.
+  "compilerOptions": {
+    "target": "ES2023",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}

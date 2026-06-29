@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-core"
+version = "1.0.0"
+description = "Estormi memory-core: canonical domain, storage, and embedding logic."
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Runtime dependencies are pinned in estormi_server/requirements.txt (single source of
+# truth for the desktop bundle). They are intentionally not duplicated here so
+# editable installs don't fight the bundle's pin set.
+dependencies = []
+
+# The package directory IS the pyproject directory (memory_core/),
+# so map the `memory_core` import name to `.` rather than the default layout
+# that would look for a nested memory_core/ subdir.
+[tool.setuptools]
+packages = ["memory_core"]
+
+[tool.setuptools.package-dir]
+memory_core = "."

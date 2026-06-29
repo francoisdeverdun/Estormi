@@ -1,0 +1,33 @@
+# cargo-about configuration. Generates THIRD-PARTY-RUST.md — the verbatim
+# license + copyright attribution for the Rust crates statically linked into the
+# shipped Estormi macOS binary (MIT/Apache and friends require their notices
+# accompany the redistribution). Regenerate with `make rust-licenses`.
+#
+# Only the shipped target matters; dev/build-only deps are not redistributed.
+targets = ["aarch64-apple-darwin"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+ignore-transitive-dependencies = false
+private = { ignore = true }
+
+# SPDX licenses we accept for a crate compiled into the distributed binary. If
+# `make rust-licenses` errors on an unlisted license, review it and add it here
+# (or add a [licenses.clarify] workaround) — never silence it blindly.
+accepted = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
+]

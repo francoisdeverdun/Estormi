@@ -1,0 +1,22 @@
+{
+  "top_level": [
+    "articleCount",
+    "date",
+    "fields",
+    "generatedAt",
+    "htmlBody",
+    "id",
+    "lang",
+    "sourceCount",
+    "title",
+    "videoCount"
+  ],
+  "fields": [
+    "myDay",
+    "objective",
+    "readiness"
+  ],
+  "optional_top_level": [
+    "audioPath"
+  ]
+}

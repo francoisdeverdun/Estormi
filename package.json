@@ -1,0 +1,18 @@
+{
+  "name": "estormi-monorepo",
+  "//": "Private monorepo root — never published. Version is intentionally decoupled from the app version (estormi_server.__version__ / pyproject / Cargo.toml); see tests/contract/test_version_consistency.py.",
+  "version": "0.0.0",
+  "description": "Estormi: Ars Memoriae — monorepo root",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev:estormi": "make dev",
+    "build:estormi": "make bundle",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

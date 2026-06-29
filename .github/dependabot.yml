@@ -1,0 +1,79 @@
+# Dependabot configuration (schema v2).
+#
+# Four ecosystems, one weekly cadence each. Minor + patch bumps are grouped
+# per ecosystem into a single PR to keep the noise down; majors stay separate
+# so they get individual review. The npm entry covers the pnpm workspace —
+# Dependabot's "npm" ecosystem reads pnpm lockfiles too.
+version: 2
+updates:
+  # The repo root has no pip manifest (pyproject declares no [project.dependencies]),
+  # so point Dependabot at the real ones: the contributor floor and the pinned
+  # bundle/lock under requirements/. Otherwise no Python security bumps are ever
+  # proposed — the bundled wheels are the largest attack surface.
+  - package-ecosystem: pip
+    directories:
+      - "/packages/estormi_server"
+      - "/requirements"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    groups:
+      pip-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: "/apps/estormi-macos"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - rust
+    groups:
+      # The whatsapp-rust family (wacore + the client and its transport/http
+      # adapters) is version-coupled — the transport's TransportFactory impl is
+      # tied to a specific wacore, so a lone bump splits the tree and breaks the
+      # build (it did: transport→0.6 while the rest stayed 0.5). Bundle every
+      # family member, all update types, into ONE PR so they move together and a
+      # breaking 0.x bump is reviewed as a unit instead of auto-merged piecemeal.
+      whatsapp-rust:
+        patterns:
+          - "whatsapp-rust*"
+          - "wacore*"
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch

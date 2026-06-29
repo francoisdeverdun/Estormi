@@ -1,0 +1,51 @@
+[package]
+name = "estormi"
+version = "0.0.3"
+edition = "2021"
+license = "Apache-2.0"
+# No stable MSRV: this crate requires a NIGHTLY toolchain (a transitive dep uses
+# the unstable `portable_simd` feature). The pinned nightly lives in
+# rust-toolchain.toml; declaring a stable `rust-version` here would be
+# misleading, so it is intentionally omitted.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# NB: we deliberately do NOT enable Tauri's `devtools` feature. Tauri already
+# exposes the WebView inspector in debug builds automatically and withholds it
+# in release; the `devtools` feature would force the inspector into the release
+# `.app` too, letting anyone right-click → Inspect Element to open a JS console
+# with full origin access to the loopback FastAPI (which holds the entire
+# memory store).
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "image-png"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+anyhow = "1"
+
+# WhatsApp (Feature 11). The whatsapp-rust family — wacore plus the client and
+# its transport/http adapters — is tightly version-coupled: the transport's
+# TransportFactory impl is tied to a specific wacore. Keep these on one minor
+# (0.5) and bump them together. Dependabot moving only the transport to 0.6
+# (#29) split the tree across two wacore versions and broke the
+# TransportFactory trait bound; a 0.6 move needs the whole family + an API
+# migration (Event variants / type changes), tracked separately.
+whatsapp-rust = { version = "0.5.0", features = ["sqlite-storage"] }
+whatsapp-rust-tokio-transport = "0.5.0"
+whatsapp-rust-ureq-http-client = "0.5.0"
+wacore = "0.5"
+axum = { version = "0.7", features = ["json"] }
+qrcode = "0.14"
+image = { version = "0.25", default-features = false, features = ["png"] }
+sha2 = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true

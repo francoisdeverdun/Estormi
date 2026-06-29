@@ -1,0 +1,63 @@
+name: CodeQL
+
+# Static analysis (CodeQL) for the interpreted languages in the repo:
+#   - python   (packages/, scripts/)
+#   - javascript-typescript (packages/web-ui, ui-kit, the Tauri frontend)
+#
+# Rust is intentionally NOT analysed here. CodeQL's Rust support needs a
+# manual cargo build on the runner, which duplicates rust.yml's toolchain
+# setup for little gain — cargo-audit (CVEs) and clippy already cover the
+# Rust crate. Swift (apps/estormi-ios) is likewise out of scope.
+#
+# Style mirrors test.yml / security.yml: push+PR on main, a weekly schedule
+# to catch drift in the query packs, concurrency cancel-in-progress, and a
+# per-job timeout.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 06:23 UTC Monday — off-peak, avoids the top-of-hour scheduler stampede.
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - python
+          - javascript-typescript
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

@@ -1,0 +1,28 @@
+You are a structured-fact extractor for a daily briefing. From the calendar
+and reminders for {{ date_str }} below, extract a few structured facts.
+
+Return ONLY raw JSON — no markdown fences, no prose, no commentary. The exact
+shape, with these keys:
+
+{
+  "physical_activities": [{"when": "19:00", "title": "Badminton"}],
+  "partner_events": [{"when": "08:30", "title": "..."}],
+  "open_loops": ["a question awaiting an answer", "a decision to take"],
+  "high_priority_reminders": ["title of the single most urgent reminder"]
+}
+
+Rules:
+- physical_activities: events that read as sport/exercise/training, in any language.
+- partner_events: events that clearly belong to the user's partner, not the user.
+- open_loops: pending questions or decisions implied by the reminders.
+- high_priority_reminders: titles only, most urgent first; empty list if none.
+- Use [] for anything absent. Never invent facts.
+
+CALENDAR:
+{% for a in calendar -%}
+- {{ a.when | default("All day") }}: {{ a.title | default("(untitled)") }}{% if a.event_type and a.event_type != "default" %} [{{ a.event_type }}]{% endif %}
+{% endfor %}
+REMINDERS:
+{% for r in reminders -%}
+- {{ r.title | default("(untitled)") }}{% if r.when %} ({{ r.when }}){% endif %}{% if r.overdue %} [overdue]{% endif %}
+{% endfor %}

@@ -1,0 +1,34 @@
+repos:
+  # ── Linting & formatting ───────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(scripts|packages|tests)/.*\.py$
+        types_or: [python, pyi]
+      - id: ruff-format
+        files: ^(scripts|packages|tests)/.*\.py$
+        types_or: [python, pyi]
+
+  # ── Security gates ──────────────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: estormi-security-scan
+        name: Estormi security scan
+        entry: python3 scripts/security_scan.py
+        language: system
+        pass_filenames: false
+        types_or: [python, javascript, ts, tsx, shell, markdown, json, yaml, toml]
+      - id: detect-secrets
+        name: detect-secrets
+        entry: python scripts/detect_secrets_gate.py
+        language: python
+        additional_dependencies: [detect-secrets==1.5.0]
+        pass_filenames: false
+      - id: bandit-high
+        name: bandit high severity gate
+        entry: bandit -r packages scripts -lll
+        language: python
+        additional_dependencies: [bandit==1.8.3]
+        pass_filenames: false

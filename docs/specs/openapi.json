@@ -1,0 +1,3161 @@
+{
+  "components": {
+    "schemas": {
+      "BriefingEditBody": {
+        "properties": {
+          "fields": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefingFieldEdits"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "htmlBody": {
+            "anyOf": [
+              {
+                "maxLength": 200000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Htmlbody"
+          }
+        },
+        "title": "BriefingEditBody",
+        "type": "object"
+      },
+      "BriefingFieldEdits": {
+        "description": "Plain-text edits to one or more editable prose sections — the bare source\nthe renderer re-wraps: the objective subtitle, the readiness steer (no\nlabel), and the My-day narrative prose. Omitted (``None``) sections are left\nuntouched.",
+        "properties": {
+          "myDay": {
+            "anyOf": [
+              {
+                "maxLength": 40000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Myday"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readiness"
+          }
+        },
+        "title": "BriefingFieldEdits",
+        "type": "object"
+      },
+      "FetchAroundBody": {
+        "properties": {
+          "corpus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corpus"
+          },
+          "date": {
+            "maxLength": 40,
+            "minLength": 4,
+            "title": "Date",
+            "type": "string"
+          },
+          "forward_days": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward Days"
+          },
+          "limit": {
+            "default": 200,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources"
+          },
+          "window_days": {
+            "default": 1,
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "FetchAroundBody",
+        "type": "object"
+      },
+      "GCalCallbackBody": {
+        "properties": {
+          "code": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "state": {
+            "default": "",
+            "maxLength": 256,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "GCalCallbackBody",
+        "type": "object"
+      },
+      "GCalSecretsBody": {
+        "description": "OAuth client JSON uploaded by the user via the GoogleCalendarPanel.\n\nThe Estormi UI lets the user drop the JSON they downloaded from\nGoogle Cloud Console straight into the connection panel; the server\nvalidates the shape (it must carry either an ``installed`` or\n``web`` key with ``client_id`` / ``client_secret``) and persists it\nto ``$DATA_DIR/google_client_secrets.json`` — the same path the\nrest of the codebase already reads from.",
+        "properties": {
+          "content": {
+            "maxLength": 16384,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "GCalSecretsBody",
+        "type": "object"
+      },
+      "GCalSelectBody": {
+        "description": "Partial-update body for one Google calendar row.\n\nBoth fields optional: the SPA sends ``{selected: true}`` from the\ntoggle and ``{group_type: \"work\"}`` from the chip selector. The\nhandler accepts either or both in one round-trip.",
+        "properties": {
+          "group_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Type"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected"
+          }
+        },
+        "title": "GCalSelectBody",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IngestBatchBody": {
+        "properties": {
+          "chunks": {
+            "items": {
+              "$ref": "#/components/schemas/IngestBody"
+            },
+            "maxItems": 100,
+            "title": "Chunks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chunks"
+        ],
+        "title": "IngestBatchBody",
+        "type": "object"
+      },
+      "IngestBody": {
+        "properties": {
+          "chat_id_raw": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id Raw"
+          },
+          "chat_name": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Name"
+          },
+          "content_hash": {
+            "maxLength": 128,
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "corpus": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corpus"
+          },
+          "date": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Date",
+            "type": "string"
+          },
+          "end_date_ts": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date Ts"
+          },
+          "event_status": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Status"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "group_type": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Type"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          },
+          "pending_reply": {
+            "default": false,
+            "title": "Pending Reply",
+            "type": "boolean"
+          },
+          "source": {
+            "maxLength": 64,
+            "title": "Source",
+            "type": "string"
+          },
+          "source_id": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 1000000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Url",
+            "type": "string"
+          },
+          "working_location": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Location"
+          }
+        },
+        "required": [
+          "text",
+          "source",
+          "content_hash"
+        ],
+        "title": "IngestBody",
+        "type": "object"
+      },
+      "IngestDeleteBody": {
+        "properties": {
+          "source": {
+            "maxLength": 64,
+            "title": "Source",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 512,
+            "title": "Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "source_id"
+        ],
+        "title": "IngestDeleteBody",
+        "type": "object"
+      },
+      "JsonRpcRequest": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "jsonrpc": {
+            "default": "2.0",
+            "title": "Jsonrpc",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "JsonRpcRequest",
+        "type": "object"
+      },
+      "PickFolderBody": {
+        "properties": {
+          "prompt": {
+            "default": "Select a folder:",
+            "maxLength": 500,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "title": "PickFolderBody",
+        "type": "object"
+      },
+      "RelocateRequest": {
+        "description": "Body of ``POST /api/storage/relocate`` — the destination library dir.",
+        "properties": {
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "title": "RelocateRequest",
+        "type": "object"
+      },
+      "RemoveBody": {
+        "properties": {
+          "kind": {
+            "description": "engine to drop from the waiting queue",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "RemoveBody",
+        "type": "object"
+      },
+      "SearchBody": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "chat_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Kind"
+          },
+          "corpus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corpus"
+          },
+          "group_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Type"
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "min_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Score"
+          },
+          "pending_reply": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Reply"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchBody",
+        "type": "object"
+      },
+      "StopBody": {
+        "properties": {
+          "kind": {
+            "description": "engine currently running to stop",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "StopBody",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WhoopCredentialsBody": {
+        "description": "The client_id / client_secret pasted from developer.whoop.com.\n\nWHOOP client ids/secrets are short opaque strings; the 512-char cap is\ngenerous headroom without letting a hostile caller send a megabyte.",
+        "properties": {
+          "client_id": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Client Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_secret"
+        ],
+        "title": "WhoopCredentialsBody",
+        "type": "object"
+      },
+      "_KbResolveBody": {
+        "properties": {
+          "url": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "_KbResolveBody",
+        "type": "object"
+      },
+      "_KbSourcesBody": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "maxItems": 500,
+        "title": "_KbSourcesBody",
+        "type": "array"
+      },
+      "_ResolveNamesBody": {
+        "properties": {
+          "chat_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Chat Ids",
+            "type": "array"
+          }
+        },
+        "title": "_ResolveNamesBody",
+        "type": "object"
+      },
+      "_ToggleSourceBody": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "_ToggleSourceBody",
+        "type": "object"
+      },
+      "_WhatsAppChatTypeBody": {
+        "properties": {
+          "group_type": {
+            "default": "unknown",
+            "title": "Group Type",
+            "type": "string"
+          }
+        },
+        "title": "_WhatsAppChatTypeBody",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Private local memory — notes, mails, messages, and docs",
+    "title": "Estormi MCP",
+    "version": "0.0.3"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "home__get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Home"
+      }
+    },
+    "/api/admin/reset": {
+      "post": {
+        "operationId": "admin_reset_api_admin_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Admin Reset"
+      }
+    },
+    "/api/admin/reset-settings": {
+      "post": {
+        "operationId": "admin_reset_settings_api_admin_reset_settings_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Admin Reset Settings"
+      }
+    },
+    "/api/briefings": {
+      "get": {
+        "description": "List the assembled briefings on disk (newest first).\n\nThe display path reads from the iCloud Drive vault, which stores each\nday's briefing as one self-contained JSON file with ``htmlBody``. The\nSQLite ``chunks`` table holds the same body split into overlapping\nwindows for search — useful for retrieval, but lossy to reassemble.",
+        "operationId": "api_list_briefings_api_briefings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api List Briefings"
+      }
+    },
+    "/api/briefings/reset": {
+      "post": {
+        "description": "Wipe every composed briefing plus the engine's run history.\n\nRemoves:\n  * any legacy chunks with ``source = 'briefing'`` (and their vectors) —\n    current briefings are vault-only, so this is normally a no-op kept to\n    clean up data from an older build that did store them,\n  * every ``briefing_runs`` row and every ``dag_runs`` row scoped to\n    ``engine = 'briefing'`` — these feed the engine-history strip,\n  * the briefing files under ``<vault>/briefings/`` and the manifest\n    listing them,\n  * the rolling ``knowledge.log`` file.\n\nSettings (cron, last-run state, knowledge_enabled, sources YAML) are\nkept. Nothing relaunches — the next scheduled run rebuilds from scratch.",
+        "operationId": "api_briefings_reset_api_briefings_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Briefings Reset"
+      }
+    },
+    "/api/briefings/{date}": {
+      "delete": {
+        "description": "Fully delete one day's briefing.\n\nBriefings are delivered to the vault only (they are not re-ingested as\n``briefing``-source chunks), so the real effect here is removing the\niCloud vault file the iOS companion reads. The ``delete_by_source_id``\ncall below is a defensive cleanup of any legacy ``briefing-<date>``\nchunks left by an older build that did store them; today it is normally\na no-op (``deleted: 0``).\n\n``briefing_runs`` rows are intentionally left in place: they are an\nengine-performance log (durations, tokens, sections), not user content,\nand deleting them would skew the engine-history stats.",
+        "operationId": "api_delete_briefing_api_briefings__date__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Delete Briefing"
+      },
+      "get": {
+        "description": "Return one day's assembled briefing JSON from the vault.",
+        "operationId": "api_get_briefing_api_briefings__date__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Get Briefing"
+      },
+      "put": {
+        "description": "Save a user-edited briefing back to the vault and fold the correction into\nthe quill's training set.\n\nAccepts either ``fields`` (structured: the server re-renders each edited\nprose section and splices it between its zone markers, so the SPA never\nhandles raw HTML) or ``htmlBody`` (the raw-HTML fallback for briefings\ncomposed before the markers existed). Either way a human-corrected briefing\nis the best possible distillation reference, so the save both updates the\nvault (the single source both the SPA and the iOS companion read) and\nregisters the corrected text as a ``user-edited`` reference + exemplars for\nthe next quill retrain. It also fires a best-effort \"Briefing updated\" APNs\nnudge (not the \"new briefing\" doorbell) so the edit surfaces on the iOS\ncompanion, which re-reads the vault on foreground.",
+        "operationId": "api_edit_briefing_api_briefings__date__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefingEditBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Edit Briefing"
+      }
+    },
+    "/api/calendar/auth": {
+      "delete": {
+        "operationId": "gcal_auth_delete_api_calendar_auth_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gcal Auth Delete"
+      }
+    },
+    "/api/calendar/auth/callback": {
+      "get": {
+        "description": "Browser-redirect handler for the Google OAuth flow.\n\nGoogle redirects here with ``?code=…`` on success or ``?error=…``\nwhen the user is blocked (most commonly ``access_denied`` when the\nOAuth consent screen is in \"Testing\" mode and the user hasn't been\nadded as a test user). We render a single ergonomic landing page in\nboth branches with a remediation recipe — closing the tab and\nstaring at the Google error screen is a dead end without it.",
+        "operationId": "gcal_auth_callback_get_api_calendar_auth_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcal Auth Callback Get"
+      },
+      "post": {
+        "operationId": "gcal_auth_callback_api_calendar_auth_callback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GCalCallbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcal Auth Callback"
+      }
+    },
+    "/api/calendar/auth/open": {
+      "post": {
+        "description": "Build the OAuth URL and open it in the system default browser.\n\nThe SPA uses this instead of ``window.open`` so the URL fires\nthrough ``open(1)`` on macOS (Safari / Chrome / Firefox), bypassing\nany Tauri webview interception that could otherwise trap the\nOAuth-consent page inside the app.",
+        "operationId": "gcal_auth_open_api_calendar_auth_open_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gcal Auth Open"
+      }
+    },
+    "/api/calendar/auth/url": {
+      "get": {
+        "operationId": "gcal_auth_url_api_calendar_auth_url_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gcal Auth Url"
+      }
+    },
+    "/api/calendar/secrets/upload": {
+      "post": {
+        "operationId": "gcal_secrets_upload_api_calendar_secrets_upload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GCalSecretsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcal Secrets Upload"
+      }
+    },
+    "/api/distill/log": {
+      "get": {
+        "description": "Tail the distillation engine log for the engine-room log view.\n\nMirrors ``/api/knowledge/log``: the distill chain writes one file\n(``<data dir>/logs/distill.log``), so there is no per-stage selection.",
+        "operationId": "distill_log_api_distill_log_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lines",
+            "required": false,
+            "schema": {
+              "default": 150,
+              "title": "Lines",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Distill Log"
+      }
+    },
+    "/api/distill/run": {
+      "post": {
+        "description": "Enqueue one distillation chain (setup → harvest → train → eval → install).\n\nThe chain self-bootstraps its MLX toolchain on first use (phase ⓪), so this\nenqueues unconditionally — no terminal step. The engine re-checks every\nprecondition (tooling, briefing count, disk) and writes any refusal into the\nstatus file. Training reads the local briefing archive — no cloud is involved.",
+        "operationId": "distill_run_api_distill_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Distill Run"
+      }
+    },
+    "/api/distill/status": {
+      "get": {
+        "description": "Everything the Maintenance card renders: workspace, tooling, verdicts.\n\n``references`` counts the briefings harvested from the vault archive into\nthe refs workspace; ``references.models`` splits them into hand-corrected\n(``user-edited``) and untouched (``archive``) so the card can surface the\nhuman-curated share.",
+        "operationId": "distill_status_api_distill_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Distill Status"
+      }
+    },
+    "/api/distill/tooling/delete": {
+      "post": {
+        "description": "Remove the installed MLX toolchain (venv + llama.cpp + base cache) to reclaim disk.",
+        "operationId": "distill_tooling_delete_api_distill_tooling_delete_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Distill Tooling Delete"
+      }
+    },
+    "/api/distill/tooling/install": {
+      "get": {
+        "description": "EventSource: install the MLX toolchain, streaming progress to the card.\n\nMirrors ``/api/model/download`` — a GET because the SPA streams progress over\nEventSource. The ~1 GB toolkit lands under the data dir, never the bundle, and\nthe install is idempotent (already-present steps are skipped).",
+        "operationId": "distill_tooling_install_api_distill_tooling_install_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Distill Tooling Install"
+      }
+    },
+    "/api/events": {
+      "get": {
+        "operationId": "engine_events_api_events_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Engine Events"
+      }
+    },
+    "/api/google-calendar/calendars": {
+      "get": {
+        "operationId": "gcal_list_calendars_api_google_calendar_calendars_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gcal List Calendars"
+      }
+    },
+    "/api/google-calendar/calendars/{calendar_id}": {
+      "patch": {
+        "operationId": "gcal_set_selected_api_google_calendar_calendars__calendar_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "calendar_id",
+            "required": true,
+            "schema": {
+              "title": "Calendar Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GCalSelectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcal Set Selected"
+      }
+    },
+    "/api/google-calendar/sync-token/reset": {
+      "post": {
+        "description": "Drop the stored per-calendar ``nextSyncToken`` map.\n\nGoogle Calendar has no watermark — it syncs incrementally off opaque\nsync tokens (see ``estormi_ingestion/google_calendar/sync.py``). Deleting the\n``google_calendar_sync_token`` row forces every selected calendar back\nto a first-run full pull on the next gcal stage. OAuth is left intact;\nre-ingest is idempotent (``/ingest_chunk`` dedupes on content_hash) so\nthis only widens the window, it doesn't duplicate events.",
+        "operationId": "gcal_reset_sync_token_api_google_calendar_sync_token_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Gcal Reset Sync Token"
+      }
+    },
+    "/api/jobs/queue/clear": {
+      "post": {
+        "description": "Drain the queue. The currently running engine is left alone.",
+        "operationId": "api_jobs_queue_clear_api_jobs_queue_clear_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Jobs Queue Clear"
+      }
+    },
+    "/api/jobs/queue/remove": {
+      "post": {
+        "description": "Drop a single waiting entry. The running engine is left alone.",
+        "operationId": "api_jobs_queue_remove_api_jobs_queue_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Jobs Queue Remove"
+      }
+    },
+    "/api/jobs/schedule": {
+      "get": {
+        "description": "Upcoming automatic launches, for the engine room's UPCOMING section.\n\nThe two daily crons (ingestion / briefing) report their APScheduler\n``next_run_time``; the WHOOP wake trigger reports its window and whether\nit already fired today (it enqueues a ~1-minute readiness refresh when\nthe briefing exists — see ``server.schedulers._schedule_whoop_poll``).",
+        "operationId": "api_jobs_schedule_api_jobs_schedule_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Jobs Schedule"
+      }
+    },
+    "/api/jobs/state": {
+      "get": {
+        "description": "Snapshot of the engine room — running kind, queue, and the queue\nrunner's view of \"what's mine right now\".",
+        "operationId": "api_jobs_state_api_jobs_state_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Jobs State"
+      }
+    },
+    "/api/jobs/stop": {
+      "post": {
+        "description": "Kill the running engine so the next queued entry can launch.\n\nNo-op when ``kind`` isn't actually running — guards against a stale\nUI click after SSE has already moved on. The launcher's\n``_close_log_on_exit`` task fires ``emit_stopped`` once the\nsubprocess exits, which is what the queue runner waits on.",
+        "operationId": "api_jobs_stop_api_jobs_stop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Jobs Stop"
+      }
+    },
+    "/api/jobs/wake-catchup": {
+      "post": {
+        "description": "Run after a system wake: enqueue any scheduled engine run missed while\nthe Mac slept (the in-process scheduler can't fire during sleep). The Tauri\nshell calls this when its health loop detects a wall-clock jump. Idempotent\n— ``enqueue`` dedupes by kind, so calling it spuriously is harmless.",
+        "operationId": "api_jobs_wake_catchup_api_jobs_wake_catchup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Jobs Wake Catchup"
+      }
+    },
+    "/api/knowledge/llm-models": {
+      "get": {
+        "description": "Available models for the briefing LLM ``provider``, plus the settings\nkey that stores the choice.\n\nThe model picker is a dropdown whose options depend on the provider:\n\n- ``local``      → the GGUF tiers actually installed on disk. The local\n  provider loads a tier (``briefing_model_tier``), not a free-text name.\n- ``claude-cli`` → the values the ``claude`` CLI's ``--model`` flag\n  accepts: family aliases (``opus``/``sonnet`` resolve to the latest of\n  each family) plus the full ``claude-fable-5`` ID (the CLI has no\n  ``fable`` alias). The CLI has no list-models command, so these are its\n  contract.\n- anything else  → no enumerable catalogue; the UI keeps the saved value.\n\nReturns ``{models: [{value, label}], current, setting_key}``.",
+        "operationId": "api_knowledge_llm_models_api_knowledge_llm_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "default": "local",
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Knowledge Llm Models"
+      }
+    },
+    "/api/knowledge/log": {
+      "get": {
+        "operationId": "api_knowledge_log_api_knowledge_log_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lines",
+            "required": false,
+            "schema": {
+              "default": 150,
+              "title": "Lines",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Knowledge Log"
+      }
+    },
+    "/api/knowledge/open-sources": {
+      "post": {
+        "operationId": "open_knowledge_sources_in_finder_api_knowledge_open_sources_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Knowledge Sources In Finder"
+      }
+    },
+    "/api/knowledge/refresh-health": {
+      "post": {
+        "description": "Enqueue a health-only refresh of today's briefing (~1 minute): fresh\nWHOOP pull, readiness card recomposed and spliced, audio re-narrated in\nthe background. Falls back to a full run when no briefing exists yet.",
+        "operationId": "api_knowledge_refresh_health_api_knowledge_refresh_health_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Knowledge Refresh Health"
+      }
+    },
+    "/api/knowledge/resolve": {
+      "post": {
+        "description": "Inspect a pasted URL and return a pre-filled knowledge-source draft.\n\nDeduces the source type from the URL, fetches a human label from the\nchannel/feed metadata, and guesses a kind. Every field is editable in the\nUI — this endpoint only supplies sensible defaults.",
+        "operationId": "resolve_knowledge_source_api_knowledge_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_KbResolveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Knowledge Source"
+      }
+    },
+    "/api/knowledge/run": {
+      "post": {
+        "description": "Enqueue a briefing-generation run. The queue runner picks it up\nwhen the engine slot is free; idempotent by kind.",
+        "operationId": "api_knowledge_run_api_knowledge_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Knowledge Run"
+      }
+    },
+    "/api/knowledge/runs": {
+      "get": {
+        "description": "Recent briefing_runs rows, newest-first.\n\nPowers the BriefingPulse stat tiles (most recent latency / tokens /\ncoverage) and the table of past runs on the Briefing page. Restricted\nto the last ``days`` days so the response stays small on long-running\ninstalls; ``limit`` caps the row count regardless of the time window.",
+        "operationId": "api_knowledge_runs_api_knowledge_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Knowledge Runs"
+      }
+    },
+    "/api/knowledge/sources": {
+      "get": {
+        "operationId": "get_knowledge_sources_api_knowledge_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Knowledge Sources"
+      },
+      "put": {
+        "operationId": "put_knowledge_sources_api_knowledge_sources_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_KbSourcesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Knowledge Sources"
+      }
+    },
+    "/api/knowledge/status": {
+      "get": {
+        "operationId": "api_knowledge_status_api_knowledge_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Knowledge Status"
+      }
+    },
+    "/api/knowledge/stop": {
+      "post": {
+        "operationId": "api_knowledge_stop_api_knowledge_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Knowledge Stop"
+      }
+    },
+    "/api/model/bundle/download": {
+      "get": {
+        "description": "EventSource: download the whole briefing model set in one gesture.\n\nPulls both local quills (Ministral 3 14B + Gemma 4 12B) and the Voxtral\nnarration voice sequentially, reporting a single aggregate progress bar.\nGET-only because EventSource cannot POST — same accepted exposure as\n``/api/model/download`` (loopback-only, rate-limited, no exfiltration).\nEach component is idempotent, so a partially-installed bundle resumes\ncleanly: already-present files are skipped.",
+        "operationId": "model_bundle_download_api_model_bundle_download_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Bundle Download"
+      }
+    },
+    "/api/model/catalog": {
+      "get": {
+        "description": "Every model in the catalog with install state + per-engine selection.\n\nThe Maintenance UI renders this: which models are downloaded, which to\noffer for install, and which model the briefing engine currently uses.\nModels list is in catalog (display) order.",
+        "operationId": "model_catalog_api_model_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Catalog"
+      }
+    },
+    "/api/model/delete": {
+      "post": {
+        "description": "Delete a downloaded model GGUF to reclaim disk.\n\nA model is binary in the UI — installed or not — so the catalog offers\nDownload when absent and Delete when present. ``tier`` is validated against\nthe catalog (no path traversal: the path is derived from the tier, never\nfrom caller input). If the model being deleted is the one currently\nresident in the sidecar, it is unloaded first so inference isn't left\npointing at an unlinked file.",
+        "operationId": "model_delete_api_model_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model Delete"
+      }
+    },
+    "/api/model/download": {
+      "get": {
+        "description": "EventSource endpoint for the UI (EventSource only supports GET).\n\nNOTE: this GET is intentionally state-changing — it kicks off a multi-GB\nmodel download and writes the GGUF to disk. It is a GET only because the\nSPA streams progress over EventSource, which cannot issue a POST. The CSRF\ngate (server/security.py) exempts GET as \"not state-changing\", so this\nendpoint is reachable without the X-Estormi-Origin header. The exposure is\naccepted because the server is loopback-only, the action is rate-limited\n(2/min), and the worst case is disk/bandwidth use with no data exfiltration\n(the response body is unreadable cross-origin).",
+        "operationId": "model_download_get_api_model_download_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Download Get"
+      }
+    },
+    "/api/model/status": {
+      "get": {
+        "operationId": "model_status_api_model_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Status"
+      }
+    },
+    "/api/open-url": {
+      "post": {
+        "operationId": "open_url_api_open_url_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Open Url"
+      }
+    },
+    "/api/permissions/recheck-fda": {
+      "post": {
+        "description": "Re-check iMessage Full Disk Access from the FDA-holding main binary.\n\nCalled when the user returns to Estormi from System Settings (window focus)\nso a just-granted FDA is detected live, without relaunching the app. The\nre-check asks the Tauri host over the loopback to re-snapshot chat.db (only\nthe main binary holds FDA — the sidecar can't) — see\n:func:`server.permissions.recheck_full_disk_access`. Returns\n``{\"status\": \"authorized\" | \"manual\" | \"unavailable\"}``.",
+        "operationId": "recheck_fda_api_permissions_recheck_fda_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Recheck Fda Api Permissions Recheck Fda Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Recheck Fda"
+      }
+    },
+    "/api/pick-folder": {
+      "post": {
+        "operationId": "pick_folder_api_pick_folder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PickFolderBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pick Folder"
+      }
+    },
+    "/api/pipeline": {
+      "get": {
+        "operationId": "api_pipeline_api_pipeline_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Pipeline"
+      }
+    },
+    "/api/pipeline/run": {
+      "post": {
+        "description": "Enqueue a pipeline run. Optionally scoped to a single stage.\n\n``?stage=notes`` runs ONLY that stage (still respects per-source\n``source_<key>_enabled``; the validation happens inside ``_run_dag``).\nThis is the per-source ▶ play button on the Procession of Sources\npanel. The call returns as soon as the run is queued — the queue\nrunner in ``server.jobs`` picks it up when the engine slot is free.",
+        "operationId": "api_pipeline_run_api_pipeline_run_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "stage",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stage"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Pipeline Run"
+      }
+    },
+    "/api/pipeline/stage-log": {
+      "get": {
+        "description": "Return the tail of a stage log file.\n\nOne of ``path`` (allow-listed), ``engine`` (logical engine name) or\n``source`` (per-source ingestion log) must be provided. ``engine``\nresolves to the canonical ``$DATA_DIR/logs/`` file for that engine;\n``source=<name>`` resolves to ``$DATA_DIR/logs/source-<name>.log``,\nso the SPA doesn't need to know server-side paths.\n\nAllow-list of acceptable locations:\n  * ``$DATA_DIR/logs/`` (production stage logs are written here by\n    ``scripts/daily_ingestion.sh``);\n  * ``/tmp`` (and its ``/private/tmp`` twin on macOS) **only** when the\n    filename starts with ``estormi-`` — keeps legacy / fallback log\n    paths working without doubling as a generic /tmp file reader.",
+        "operationId": "api_pipeline_stage_log_api_pipeline_stage_log_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "engine",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Engine"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lines",
+            "required": false,
+            "schema": {
+              "default": 2000,
+              "title": "Lines",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Pipeline Stage Log"
+      }
+    },
+    "/api/pipeline/stop": {
+      "post": {
+        "operationId": "api_pipeline_stop_api_pipeline_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Api Pipeline Stop"
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "operationId": "get_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings"
+      },
+      "put": {
+        "operationId": "put_settings_api_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "title": "Updates",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings"
+      }
+    },
+    "/api/settings/overview": {
+      "get": {
+        "description": "One-shot JSON snapshot of everything the Settings UI shows on load.",
+        "operationId": "settings_overview_api_settings_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Settings Overview"
+      }
+    },
+    "/api/sources/whatsapp/log/reset": {
+      "post": {
+        "description": "Destructive: wipe the durable WhatsApp message log AND its derived chunks.\n\nKept separate from ``Reset data`` on purpose — the two have very different\ncosts. ``Reset data`` only drops the derived chunks, which re-derive from the\nlog on the next run with no rescan. This drops the **raw messages** too, so\nthe only way to get them back is a full WhatsApp rescan (the offline queue\nonly re-delivers what the server still holds).",
+        "operationId": "reset_whatsapp_log_api_sources_whatsapp_log_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Reset Whatsapp Log"
+      }
+    },
+    "/api/sources/{name}/reset": {
+      "post": {
+        "description": "Wipe one source's chunks + vectors + watermark + staging.\n\nThe DangerZone block in SourceManageModal hits this so a \"Reset data\"\nclick on Apple Notes (or any single source) doesn't clobber every other\nsource in the vault.\n\n`name` is the watermark/db key (`notes`, `mail`, `calendar`, `gcal`,\n…) — the same value the watermark-reset endpoint already accepts.\nValidated against a slug pattern before any filesystem or database\naccess.",
+        "operationId": "reset_source_data_api_sources__name__reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Source Data"
+      }
+    },
+    "/api/sources/{name}/toggle": {
+      "post": {
+        "description": "Enable/disable a source.\n\nActivating a source also triggers its macOS permission prompt *now* —\nattributed to Estormi — and verifies the result, so the user grants\n(or is told to grant) access at the moment of activation instead of\nmid-pipeline-run. ``permission`` is the verified outcome, or ``null``\nfor sources that need no macOS permission (or when disabling).",
+        "operationId": "toggle_source_api_sources__name__toggle_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_ToggleSourceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Toggle Source"
+      }
+    },
+    "/api/sources/{name}/watermark/reset": {
+      "put": {
+        "operationId": "reset_watermark_api_sources__name__watermark_reset_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Watermark"
+      }
+    },
+    "/api/storage/location": {
+      "get": {
+        "description": "The current library dir, its free space + size, and any queued move.",
+        "operationId": "storage_location_api_storage_location_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Storage Location"
+      }
+    },
+    "/api/storage/relocate": {
+      "post": {
+        "description": "Queue a move of the whole library to ``body.to`` on the next launch.\n\nValidates, then writes only the relocation marker — nothing moves now. The\nrunning app keeps using the current dir until it is reopened.",
+        "operationId": "storage_relocate_api_storage_relocate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelocateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Storage Relocate"
+      }
+    },
+    "/api/timeseries": {
+      "get": {
+        "description": "Per-source stacked-area data for the macOS ``IngestionPulse`` chart.\n\nTwo views over the same window, selected by ``mode``:\n\n  * ``ingestion`` — chunks *added* per day per source (a spiky daily\n    delta);\n  * ``memory`` (default) — the cumulative *store* per source, so the\n    stack climbs monotonically and the last day lands on the all-time\n    total. This mirrors the iOS companion's \"Memoria\" card and the\n    ``memory`` block of ``jobs._build_vault_metrics``.\n\nBuckets ``chunks.ingested_at`` (UTC ``YYYY-MM-DD HH:MM:SS``) by calendar\nday and source; the response shape (``days`` / ``sources`` /\n``series[].by_source``) is the contract the dashboard chart follows.\n\nThis route was lost when the Extraction/Correlation engines were deleted\n(it lived in the removed ``api/entities.py``), which silently blanked the\ndashboard graph. Re-homed here since it reads only the ingestion ``chunks``\ntable — no entity machinery.",
+        "operationId": "api_timeseries_api_timeseries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "memory",
+              "title": "Mode",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Api Timeseries"
+      }
+    },
+    "/api/tts/catalog": {
+      "get": {
+        "description": "Every TTS model with install state, in catalog (display) order.",
+        "operationId": "tts_catalog_api_tts_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tts Catalog"
+      }
+    },
+    "/api/tts/delete": {
+      "post": {
+        "description": "Delete the downloaded TTS snapshot to reclaim disk.\n\n``key`` is validated against the catalog (no path traversal — the directory\nis derived in ``tts_local``, never from caller input).",
+        "operationId": "tts_delete_api_tts_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tts Delete"
+      }
+    },
+    "/api/tts/download": {
+      "get": {
+        "description": "EventSource endpoint that streams Voxtral snapshot download progress.\n\nGET-only because EventSource cannot POST; like ``/api/model/download`` this\nGET is intentionally state-changing. Accepted because the server is\nloopback-only, the action is rate-limited (2/min), and the worst case is\ndisk/bandwidth use with no data exfiltration.",
+        "operationId": "tts_download_get_api_tts_download_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tts Download Get"
+      }
+    },
+    "/api/whatsapp/backfill-titles": {
+      "post": {
+        "description": "Re-title WhatsApp chunks left with a raw-JID title by an ingest-time race.\n\nA chunk's title is baked in when its window is first ingested; if the chat's\nname resolved only later (the metadata lagged behind ingestion), the chunk\nkeeps a ``WhatsApp — <raw JID>`` title forever and the briefing renders it\nas \"a contact\". This finds those chunks and rewrites the title once a real\nname is available. Idempotent: a chunk already carrying a real name is not\nmatched, so steady-state runs update nothing.",
+        "operationId": "whatsapp_backfill_titles_api_whatsapp_backfill_titles_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Backfill Titles"
+      }
+    },
+    "/api/whatsapp/chats": {
+      "get": {
+        "operationId": "whatsapp_chats_api_whatsapp_chats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Chats"
+      }
+    },
+    "/api/whatsapp/chats/auto-tag": {
+      "post": {
+        "description": "Kick off LLM classification of WhatsApp chat tags.\n\nInternal trigger: the WhatsApp ingestion script POSTs to this at the end\nof each run so newly-paired chats with fresh message text get classified\nautomatically. Body (optional): ``{\"only_unknown\": bool}`` — default\n``true``; pass ``false`` to re-classify every chat.",
+        "operationId": "whatsapp_chats_auto_tag_api_whatsapp_chats_auto_tag_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Chats Auto Tag"
+      }
+    },
+    "/api/whatsapp/chats/auto-tag/status": {
+      "get": {
+        "description": "Read the in-memory progress of the most recent auto-tag run.\n\nLets the SPA poll for completion without re-issuing the POST (which\nno-ops while ``running=True`` but doesn't surface progress otherwise).",
+        "operationId": "whatsapp_chats_auto_tag_status_api_whatsapp_chats_auto_tag_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Chats Auto Tag Status"
+      }
+    },
+    "/api/whatsapp/chats/{chat_id}": {
+      "patch": {
+        "operationId": "update_whatsapp_chat_type_api_whatsapp_chats__chat_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chat_id",
+            "required": true,
+            "schema": {
+              "title": "Chat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_WhatsAppChatTypeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Whatsapp Chat Type"
+      }
+    },
+    "/api/whatsapp/qr.png": {
+      "get": {
+        "operationId": "whatsapp_qr_api_whatsapp_qr_png_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Qr"
+      }
+    },
+    "/api/whatsapp/reset": {
+      "post": {
+        "description": "Disconnect WhatsApp: forget the session and wipe its data for a clean re-pair.\n\nA bare ``DELETE FROM chunks`` data reset deliberately keeps ``wa.db`` (it's\na credential, not ingested data), but that strands WhatsApp — an\nalready-paired device never gets a fresh HistorySync, so message history\ncan't come back without forgetting the session. This per-source Disconnect\nis that escape hatch and a full clean slate: drop the session store, the\nsticky pairing marker, the stale ``whatsapp_chats`` metadata, AND the message\nlog + its derived chunks. A re-pair then re-enumerates chats (re-resolving\nnames) and re-backfills history from scratch, with no stale rows left behind.\nDisconnect is the only place that wipes on its own — an *involuntary* unpair\n(WhatsApp dropping the link) leaves everything intact and just surfaces\n\"Awaiting scan\", so old history isn't lost to a transient disconnect.",
+        "operationId": "whatsapp_reset_api_whatsapp_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Reset"
+      }
+    },
+    "/api/whatsapp/resolve-names": {
+      "post": {
+        "description": "Resolve + persist names for the given chat ids and return the map.\n\nThe WhatsApp ingestor calls this for chats whose name it doesn't have yet,\nso a brand-new DM's first messages get the real contact name even though\nthe chat-list enrichment hasn't created its row. Persisting the result\nkeeps every later reader (the chat list, the briefing) consistent.",
+        "operationId": "whatsapp_resolve_names_api_whatsapp_resolve_names_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_ResolveNamesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Whatsapp Resolve Names"
+      }
+    },
+    "/api/whatsapp/status": {
+      "get": {
+        "operationId": "whatsapp_status_api_whatsapp_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whatsapp Status"
+      }
+    },
+    "/api/whoop/auth": {
+      "delete": {
+        "operationId": "whoop_auth_delete_api_whoop_auth_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whoop Auth Delete"
+      }
+    },
+    "/api/whoop/auth/callback": {
+      "get": {
+        "description": "Browser-redirect handler for the WHOOP OAuth flow.",
+        "operationId": "whoop_auth_callback_api_whoop_auth_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Whoop Auth Callback"
+      }
+    },
+    "/api/whoop/auth/open": {
+      "post": {
+        "description": "Build the consent URL and open it in the system default browser.\n\nUses ``open(1)`` so the URL fires through Safari/Chrome rather than being\ntrapped inside the Tauri webview. Same rationale as the gcal flow.",
+        "operationId": "whoop_auth_open_api_whoop_auth_open_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whoop Auth Open"
+      }
+    },
+    "/api/whoop/credentials/upload": {
+      "post": {
+        "operationId": "whoop_credentials_upload_api_whoop_credentials_upload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhoopCredentialsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Whoop Credentials Upload"
+      }
+    },
+    "/api/whoop/status": {
+      "get": {
+        "description": "Drive the Settings panel's three states: setup / disconnected / connected.\n\n``client`` false → no credentials yet (setup). ``connected`` true → a token\nis stored and still refreshable. A stored-but-dead refresh token reads as\n``connected: false`` so the panel offers a reconnect.",
+        "operationId": "whoop_status_api_whoop_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Whoop Status"
+      }
+    },
+    "/fetch_around": {
+      "post": {
+        "operationId": "fetch_around_rest_fetch_around_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchAroundBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Around Rest"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/ingest_batch": {
+      "post": {
+        "operationId": "ingest_batch_rest_ingest_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Batch Rest"
+      }
+    },
+    "/ingest_chunk": {
+      "post": {
+        "operationId": "ingest_chunk_rest_ingest_chunk_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Chunk Rest"
+      }
+    },
+    "/ingest_delete": {
+      "post": {
+        "description": "Retract a single item by (source, source_id) — SQLite + Qdrant.\n\nConnector-facing counterpart of ``/ingest_chunk``: lets an ingestion\nstage remove an item that disappeared upstream (e.g. a cancelled\nGoogle Calendar event) without the caller knowing the chunk id.",
+        "operationId": "ingest_delete_rest_ingest_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestDeleteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Delete Rest"
+      }
+    },
+    "/mcp": {
+      "post": {
+        "operationId": "mcp_rpc_mcp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JsonRpcRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mcp Rpc"
+      }
+    },
+    "/search_memory": {
+      "post": {
+        "operationId": "search_memory_rest_search_memory_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Memory Rest"
+      }
+    },
+    "/sse": {
+      "get": {
+        "operationId": "sse_endpoint_sse_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sse Endpoint"
+      }
+    }
+  }
+}

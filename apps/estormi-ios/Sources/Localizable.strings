@@ -1,0 +1,6 @@
+/* CloudKit doorbell banner (CKQuerySubscription.notificationInfo — see
+   CloudKitDoorbell.makeSubscription). Apple renders these on delivery, even
+   when the app is force-quit; %@ is the briefing date pulled from the
+   record's `date` field via alertLocalizationArgs. */
+"BRIEFING_PUSH_TITLE" = "New briefing";
+"BRIEFING_PUSH_BODY" = "Your briefing for %@ is ready to read.";
