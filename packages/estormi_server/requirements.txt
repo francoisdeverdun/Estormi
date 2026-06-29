@@ -18,12 +18,12 @@ slowapi>=0.1.9
 pydantic>=2.7.0
 python-dotenv>=1.0.0
 structlog>=24.1.0
-sse-starlette>=2.1.0
+sse-starlette>=3.4.5
 pyyaml>=6.0.3
 # ≥ 0.3.28: the Gemma 4 12B catalog tier needs a vendored llama.cpp that
 # knows the gemma4 arch — 0.3.28 is the version it's validated on, and
 # matches the requirements-bundle.txt pin.
-llama-cpp-python>=0.3.28
+llama-cpp-python>=0.3.31
 # On-device briefing narration: Voxtral TTS via MLX (Apple Silicon only). The
 # Mac synthesizes the briefing to .m4a (see memory_core/tts_local.py); the iOS
 # companion just plays it. mlx-audio pulls mlx; mistral-common[audio] provides

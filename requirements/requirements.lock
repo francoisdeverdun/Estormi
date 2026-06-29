@@ -854,8 +854,8 @@ limits==5.8.0 \
     --hash=sha256:ae1b008a43eb43073c3c579398bd4eb4c795de60952532dc24720ab45e1ac6b8 \
     --hash=sha256:c9e0d74aed837e8f6f50d1fcebcf5fd8130957287206bc3799adaee5092655da
     # via slowapi
-llama-cpp-python==0.3.28 \
-    --hash=sha256:958227b394f413425d6039952096daa0b8b98328c6b99d652862aec775f1672d
+llama-cpp-python==0.3.32 \
+    --hash=sha256:b06502361770f82eb08b7f1a192eb084b9ead2b88fe32cda8c397a2782eabde6
     # via -r packages/estormi_server/requirements.txt
 loguru==0.7.3 \
     --hash=sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6 \
@@ -2648,9 +2648,9 @@ soxr==1.1.0 \
     --hash=sha256:f4977323ef9c3aa3c2a26ff5fe0191c84b8fd759daf7afb1f25a91a55ad8b730 \
     --hash=sha256:feebcba99ac99adb8009d46c8f4c1956b8c167576b0ae8a6fb47502e9a6f78e7
     # via mistral-common
-sse-starlette==3.4.4 \
-    --hash=sha256:07e0fa0460138baf25cdd5fb28683472c3995dc1642225191b3832d62526bcb0 \
-    --hash=sha256:3f4dd50d8aed2771a091f3a83000323fc3844541c16b4fe585ae2420cc6df973
+sse-starlette==3.4.5 \
+    --hash=sha256:83072538bc211a2f68b7b0422226c4af3e9b62e106e07034664b832ca019842a \
+    --hash=sha256:e71bad53323f65573c3864a6c3bd0c1eb6e5f092b2e48082b0c35927d19ca296
     # via -r packages/estormi_server/requirements.txt
 starlette==1.3.1 \
     --hash=sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0 \
