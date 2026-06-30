@@ -1,9 +1,14 @@
 /**
  * useGoogleCalendar — the connection state machine behind GoogleCalendarPanel.
  *
- * A two-step probe drives the state: GET /api/calendar/auth/url (a 400 means
- * client secrets are missing → 'setup'), then GET /api/google-calendar/calendars
- * (200 → 'connected', 401 → 'disconnected'). Owns the OAuth open/poll,
+ * A two-step probe drives the state. The authoritative check comes first: GET
+ * /api/google-calendar/calendars (200 → 'connected'). A live OAuth token —
+ * which lives in the system keyring and carries its own client_secret — works
+ * even when google_client_secrets.json is absent from the data dir, so an
+ * existing connection must report 'connected' regardless of that file. Only
+ * when no token is present (401) do we fall back to GET /api/calendar/auth/url
+ * to distinguish 'setup' (400 → client secrets missing) from 'disconnected'
+ * (200 → secrets present, not yet authorized). Owns the OAuth open/poll,
  * disconnect, and per-calendar selection / life-context tagging. Extracted from
  * GoogleCalendarPanel.tsx.
  */
@@ -24,22 +29,25 @@ export function useGoogleCalendar(onChanged?: () => void) {
   const [calendars, setCalendars] = useState<GCalCalendar[] | null>(null)
 
   const probeFn = useCallback(async (): Promise<OAuthConnState> => {
-    // 1. Probe the auth-url endpoint: 400 → missing client secrets ('setup'),
-    //    success → secrets present (a token may or may not exist yet).
-    try {
-      await getGoogleAuthUrl()
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 400) return 'setup'
-      throw e
-    }
-    // 2. Try the calendars list: 200 → connected (cache the list), 401 → need
-    //    to connect, anything else → surface as error (thrown → 'error').
+    // 1. Authoritative: does a working OAuth token exist? The token lives in the
+    //    system keyring and carries its own client_secret, so it round-trips
+    //    even when google_client_secrets.json is missing from the data dir.
+    //    200 → connected (cache the list); 401 → no token, fall through.
     try {
       const list = await getGoogleCalendars()
       setCalendars(list)
       return 'connected'
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) return 'disconnected'
+      if (!(e instanceof ApiError) || e.status !== 401) throw e
+    }
+    // 2. No token. Probe the auth-url endpoint to tell the two unauthenticated
+    //    states apart: 400 → client secrets missing ('setup'), 200 → secrets
+    //    present but not yet authorized ('disconnected').
+    try {
+      await getGoogleAuthUrl()
+      return 'disconnected'
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) return 'setup'
       throw e
     }
   }, [])
