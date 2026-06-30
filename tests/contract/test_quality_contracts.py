@@ -118,7 +118,7 @@ class TestPipelineContracts:
         ]:
             assert forbidden not in qa
 
-    def test_github_release_is_tag_only_and_tests_before_building(self):
+    def test_github_release_publishes_on_tag_only_and_tests_before_building(self):
         workflow = _read(".github/workflows/release.yml")
 
         assert "tags:" in workflow
@@ -126,6 +126,15 @@ class TestPipelineContracts:
         assert "needs: [lint, test]" in workflow
         assert "cargo tauri build" in workflow
         assert "softprops/action-gh-release" in workflow
+        # Manual builds are allowed (workflow_dispatch) but must NEVER publish a
+        # Release — only a pushed v* tag does. Pin both so the boundary can't be
+        # silently erased: the publish step is gated on a tag ref, and the DMG is
+        # always exposed as an artifact for non-tag (manual) runs.
+        assert "workflow_dispatch:" in workflow
+        assert "if: startsWith(github.ref, 'refs/tags/')" in workflow
+        assert "actions/upload-artifact" in workflow
+        # Never trigger off a PR or a branch push — that's what would turn the
+        # heavy macOS DMG build into per-PR cost and let a non-tag ref publish.
         assert "pull_request:" not in workflow
         assert "branches: [main]" not in workflow
         assert "make tag" not in workflow

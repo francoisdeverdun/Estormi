@@ -1,9 +1,15 @@
 name: Release
 
 on:
+  # A pushed v* tag builds AND publishes the GitHub Release (fully automatic).
   push:
     tags:
       - 'v*'
+  # Manual run (from any branch) builds the DMG and uploads it as a downloadable
+  # artifact for testing — it does NOT publish a Release (publishing is tag-only,
+  # see the `Publish GitHub Release` step's `if`). Keeps the heavy macOS build
+  # off every PR while still letting the maintainer produce a build on demand.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -156,7 +162,23 @@ jobs:
           # Expose the bare hash for the release body.
           echo "sha256=$(awk '{print $1}' Estormi.dmg.sha256)" >> "$GITHUB_OUTPUT"
 
+      # Always expose the built DMG + checksum as a workflow artifact. For a
+      # manual (workflow_dispatch) run this is the ONLY output — the maintainer
+      # downloads it to test the build. On a tag run it's a convenient backup of
+      # what was published to the Release below.
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Estormi-dmg
+          path: |
+            apps/estormi-macos/target/aarch64-apple-darwin/release/bundle/dmg/Estormi.dmg
+            apps/estormi-macos/target/aarch64-apple-darwin/release/bundle/dmg/Estormi.dmg.sha256
+
       - name: Publish GitHub Release
+        # Tag-only: a manual/branch build produces the artifact above but must
+        # never create a public Release (its ref_name would be a branch, not a
+        # version). Publishing stays fully automatic on a pushed v* tag.
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Estormi ${{ github.ref_name }}
