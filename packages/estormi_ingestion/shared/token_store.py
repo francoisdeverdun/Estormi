@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 
 import structlog
@@ -95,3 +96,74 @@ def delete_token(service: str, key: str, *, token_file: str) -> None:
             os.remove(token_file)
         except OSError:
             pass
+
+
+# ─── Keychain-only secrets (no file fallback) ────────────────────────────────
+#
+# Long-lived app credentials — the OAuth *client* id/secret a connector needs,
+# as opposed to the per-user token above — live in the keyring ONLY. Unlike a
+# token, a client secret is never mirrored to a cleartext file in the data dir
+# (which would otherwise travel with a relocated/backed-up library). Reads and
+# writes propagate a keyring fault to the caller rather than silently degrading,
+# so the UI can surface a clear "couldn't reach the Keychain" error instead of
+# losing the secret. ``migrate_file_to_keyring`` imports any legacy cleartext
+# file once, then deletes it.
+
+
+def save_secret(service: str, key: str, data: dict[str, Any]) -> None:
+    """Persist a secret dict to the system keyring. No file fallback."""
+    import keyring  # type: ignore  # noqa: PLC0415
+
+    keyring.set_password(service, key, json.dumps(data))
+
+
+def load_secret(service: str, key: str) -> dict[str, Any] | None:
+    """Read a secret dict from the system keyring; ``None`` if absent."""
+    import keyring  # type: ignore  # noqa: PLC0415
+
+    raw = keyring.get_password(service, key)
+    return json.loads(raw) if raw else None
+
+
+def delete_secret(service: str, key: str) -> None:
+    """Remove a secret from the system keyring (quiet no-op if absent)."""
+    import keyring  # type: ignore  # noqa: PLC0415
+
+    try:
+        keyring.delete_password(service, key)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def migrate_file_to_keyring(
+    service: str,
+    key: str,
+    *,
+    legacy_file: str,
+    transform: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Import a legacy cleartext secret file into the keyring, once.
+
+    Returns the migrated dict, or ``None`` if there was nothing to migrate.
+    After a successful keyring write the cleartext file is deleted so the
+    secret no longer lingers on disk. ``transform`` lets a caller normalise the
+    file's shape before storing (e.g. unwrap Google's ``installed``/``web``
+    envelope).
+    """
+    if not os.path.exists(legacy_file):
+        return None
+    try:
+        with open(legacy_file, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:  # noqa: BLE001
+        log.warning("legacy secret file unreadable: %s", e)
+        return None
+    if transform is not None:
+        data = transform(data)
+    save_secret(service, key, data)
+    try:
+        os.remove(legacy_file)
+    except OSError:
+        pass
+    log.info("migrated legacy secret file into keyring: %s", legacy_file)
+    return data

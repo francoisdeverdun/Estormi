@@ -11,9 +11,6 @@ from __future__ import annotations
 import asyncio
 import html
 import json
-import os
-from os import replace as os_replace
-from pathlib import Path
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
@@ -204,8 +201,8 @@ class GCalSecretsBody(BaseModel):
     Google Cloud Console straight into the connection panel; the server
     validates the shape (it must carry either an ``installed`` or
     ``web`` key with ``client_id`` / ``client_secret``) and persists it
-    to ``$DATA_DIR/google_client_secrets.json`` — the same path the
-    rest of the codebase already reads from.
+    to the system keyring — the same store the rest of the codebase
+    reads from. The client secret never lands in a cleartext file.
     """
 
     # Google client-secret JSON is < 1 KB in practice; the 16 KB cap
@@ -217,7 +214,7 @@ class GCalSecretsBody(BaseModel):
 @router.post("/api/calendar/secrets/upload")
 @limiter.limit("10/minute")
 async def gcal_secrets_upload(request: Request, body: GCalSecretsBody):
-    from estormi_ingestion.google_calendar.auth import _client_secrets_path  # noqa: PLC0415
+    from estormi_ingestion.google_calendar.auth import save_client_secrets  # noqa: PLC0415
 
     # 1) Parse the upload as JSON. We accept either a raw string from
     #    `FileReader.readAsText()` or a stringified object.
@@ -257,43 +254,13 @@ async def gcal_secrets_upload(request: Request, body: GCalSecretsBody):
             ),
         )
 
-    # 3) Persist. Atomic write: ``<tmp>`` + ``rename`` so a partial
-    #    write can never leave a half-baked secrets file behind. The tmp is
-    #    created 0o600 from the start (mirrors the WHOOP token path) so the
-    #    OAuth client secret is never world-readable, not even briefly.
-    target = Path(_client_secrets_path())
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".json.tmp")
-    payload = json.dumps(data, indent=2)
-
-    def _write_secret() -> None:
-        # O_TRUNC tolerates a leftover tmp from a crashed prior run; the
-        # explicit fchmod guarantees 0o600 even when O_CREAT's mode is ignored
-        # (the file already existed).
-        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        # fdopen takes ownership of the fd; the with-block closes it on exit
-        # (and on error) — no separate os.close, which would double-close.
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            # Belt-and-suspenders: a pre-existing tmp keeps its old mode (O_CREAT's
-            # mode arg is ignored), so re-assert 0o600. Best-effort per the
-            # data-at-rest convention.
-            try:
-                os.fchmod(f.fileno(), 0o600)
-            except OSError:
-                pass
-            f.write(payload)
-        os_replace(str(tmp), str(target))
-
-    try:
-        await asyncio.to_thread(_write_secret)
-    finally:
-        try:
-            tmp.unlink()
-        except FileNotFoundError:
-            pass
+    # 3) Persist to the system keyring (no cleartext file). ``save_client_secrets``
+    #    unwraps the ``installed``/``web`` envelope and stores the inner client.
+    #    keyring access can stall, so run it off the event loop.
+    await asyncio.to_thread(save_client_secrets, data)
     return {
         "ok": True,
-        "path": str(target),
+        "stored": "keychain",
         "client_type": "installed" if "installed" in data else "web",
     }
 

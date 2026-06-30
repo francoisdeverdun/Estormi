@@ -162,7 +162,7 @@
         "type": "object"
       },
       "GCalSecretsBody": {
-        "description": "OAuth client JSON uploaded by the user via the GoogleCalendarPanel.\n\nThe Estormi UI lets the user drop the JSON they downloaded from\nGoogle Cloud Console straight into the connection panel; the server\nvalidates the shape (it must carry either an ``installed`` or\n``web`` key with ``client_id`` / ``client_secret``) and persists it\nto ``$DATA_DIR/google_client_secrets.json`` — the same path the\nrest of the codebase already reads from.",
+        "description": "OAuth client JSON uploaded by the user via the GoogleCalendarPanel.\n\nThe Estormi UI lets the user drop the JSON they downloaded from\nGoogle Cloud Console straight into the connection panel; the server\nvalidates the shape (it must carry either an ``installed`` or\n``web`` key with ``client_id`` / ``client_secret``) and persists it\nto the system keyring — the same store the rest of the codebase\nreads from. The client secret never lands in a cleartext file.",
         "properties": {
           "content": {
             "maxLength": 16384,
