@@ -139,6 +139,41 @@ def _stub_keyring():
         yield store
 
 
+# Suite-wide guard: never construct the real llama.cpp model in a test.
+#
+# ``memory_core.llm_local.get_llm`` lazily does ``from llama_cpp import Llama``
+# and builds it via ``_load_with_fallback``. The prebuilt ``llama-cpp-python``
+# wheel emits CPU instructions (AVX/AVX512/FMA) that some CI runners lack, so a
+# real construction aborts the whole process with ``Fatal Python error: Illegal
+# instruction`` — taking the entire ``-m integration`` run down with it. No test
+# needs a real model: the LLM-aware paths either mock the call (briefing
+# ``llm.runtime._llm_call``) or, for the one integration test that runs the real
+# briefing pipeline, rely on its best-effort degrade-when-the-load-fails branch.
+#
+# We patch the ``llama_cpp.Llama`` *class* (not ``get_llm`` / ``_load_with_fallback``,
+# which have dedicated unit tests that pass their own fake ``llama_cls``). The
+# replacement raises on construction, so the load ladder exhausts and the caller
+# degrades exactly as it would on a machine without a model. A no-op when
+# ``llama_cpp`` isn't installed (e.g. the typecheck env). Mirrors ``_stub_keyring``.
+@pytest.fixture(autouse=True)
+def _block_real_local_llm(monkeypatch):
+    try:
+        import llama_cpp  # noqa: PLC0415
+    except Exception:
+        yield
+        return
+
+    class _BlockedLlama:
+        def __init__(self, *_a, **_k):
+            raise RuntimeError(
+                "real local LLM blocked in tests — mock the LLM call "
+                "(see _block_real_local_llm in tests/conftest.py)"
+            )
+
+    monkeypatch.setattr(llama_cpp, "Llama", _BlockedLlama)
+    yield
+
+
 # Reset the security boundary's bearer-token cache between tests. In
 # production the cache is primed once at lifespan startup so the keychain
 # round-trip doesn't happen on every request; in the test suite each test
