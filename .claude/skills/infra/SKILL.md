@@ -218,32 +218,37 @@ hardcodes nothing. Follow the **"How to Add a New Data Source"** recipe in the
 
 ## CI Workflows
 
-GitHub Actions are split by stack so each PR only pays for what it touches.
-The repo runs on the **free-tier 2,000 Actions-minutes/month** budget, so heavy
-or rarely relevant jobs are path-filtered or scheduled, not run on every PR.
+GitHub Actions are split by stack so each PR runs a focused, fast subset. The
+repo is **public**, so standard GitHub-hosted runners are **free with unlimited
+minutes** — minutes are no longer a budget constraint. Jobs stay path-filtered
+and split for **fast feedback and low noise** (not cost), while the security and
+full-coverage gates run on **every PR**.
 
 | Workflow | Trigger | Scope |
 |---|---|---|
-| `.github/workflows/test.yml` | push to `main` + PR (skips docs-only) | Python lint, unit, integration, e2e, contract, runtime suite + web-ui Vitest & Playwright e2e (`frontend` job). Full-coverage + badge commit gated to `push` on `main`. |
+| `.github/workflows/test.yml` | push to `main` + PR (skips docs-only) | Python lint, unit, integration, e2e, contract, runtime suite + web-ui Vitest & Playwright e2e (`frontend` job). Full-coverage (`--cov-fail-under`) runs on **every PR** and push to `main`. |
 | `.github/workflows/rust.yml` | push/PR with `apps/estormi-macos/**` changes | Rust fmt, clippy, cargo-audit. Caches `cargo-audit` binary. |
 | `.github/workflows/js.yml` | push/PR with `packages/web-ui/**`, `packages/ui-kit/**`, or root JS manifests | `pnpm -r typecheck` + `pnpm -r test`. |
 | `.github/workflows/ios.yml` | push/PR with `apps/estormi-ios/**`, `packages/ui-kit/src/briefing.css`, or `.github/workflows/ios.yml` | `xcodegen generate` + `xcodebuild build` + `xcodebuild test` on macOS. |
-| `.github/workflows/security.yml` | every PR + nightly schedule + push to `main` (security-relevant paths) | bandit, pip-audit, detect-secrets, TruffleHog history scan. Runs on every PR so a secret/CVE can't reach `main`. |
-| `.github/workflows/release.yml` | git tags `v*` | macOS DMG build (10× minute cost — tag-gated only). |
+| `.github/workflows/security.yml` | every PR + push + nightly schedule + `workflow_dispatch` | bandit, pip-audit, detect-secrets, TruffleHog (gating diff scan + non-gating deep `unverified` sweep — both run on every PR now). A secret/CVE must not reach `main`. |
+| `.github/workflows/release.yml` | git tags `v*` + manual `workflow_dispatch` | macOS DMG build. A `v*` tag builds **and publishes** the GitHub Release (auto); a manual run only builds + uploads the DMG as an artifact (publishing is tag-only). |
 
 Hard rules when editing CI:
 
-- **Never put `pull_request:` on `release.yml`.** The DMG build consumes
-  disproportionate minutes; it is tag-gated only. (`security.yml` intentionally
-  runs on every PR — a secret/CVE introduced in a PR must not reach `main`.)
+- **`release.yml` publishes on tags only; never on `pull_request:` or a branch
+  push.** A manual build is fine (`workflow_dispatch`, artifact only), but the
+  `Publish GitHub Release` step is gated on a tag ref — a non-tag ref must never
+  create a Release. (`security.yml` runs on every PR — a secret/CVE introduced
+  in a PR must not reach `main`.)
 - **Never duplicate the lint job.** `python-lint` in `test.yml` is the single
   ruff gate; do not re-add a standalone `lint.yml`.
-- **Path-filter heavy stacks.** Rust and JS jobs only run when their stack
-  actually changed. If you add a new heavy job, give it `paths:` or move it
-  to `security.yml`'s schedule.
-- **Never run `python-full` (pytest + coverage + badge commit) on PRs.** The
-  per-layer jobs (`test-unit`/`integration`/`e2e`/`contract`) already cover PR
-  signal — running the suite twice doubled the bill historically.
+- **Path-filter heavy stacks for fast feedback** (not cost — minutes are free on
+  this public repo). Rust/JS/iOS jobs run when their stack changed; the nightly
+  `security.yml` schedule catches dependency drift regardless.
+- **`python-full` (full pytest + coverage) runs on every PR.** Public repo →
+  free minutes, so the coverage gate (`--cov-fail-under`) guards every PR, not
+  just merges. It only uploads artifacts (no commit), so it runs with
+  least-privilege `contents: read`.
 - **Workflow renames are contracts.** `tests/contract/test_quality_contracts.py`
   asserts on workflow content; update the test in the same commit.
 
@@ -253,4 +258,4 @@ Hard rules when editing CI:
 |---|---|---|
 | `STAGES` has no preflight validation | Typos fail only when the stage runs | Add a whitelist before execution |
 | Uvicorn host/port settings are startup-time values | Settings UI cannot change the bind of a running bundled sidecar | Add restart/apply flow before promising live LAN mode |
-| Free-tier GitHub Actions budget (2,000 min/mo) | Easy to exhaust if new heavy jobs run on every PR | Add new heavy CI jobs to `security.yml`'s schedule or path-filter them; see the "CI Workflows" rules above |
+| macOS DMG build is heavy (~slow, but free on a public repo) | A manual `workflow_dispatch` build is opt-in; tag pushes publish releases | Keep it off `pull_request:`; see the "CI Workflows" rules above |

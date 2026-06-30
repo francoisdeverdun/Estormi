@@ -293,12 +293,15 @@ jobs:
     name: Python tests / full coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Coverage + badge commit only runs on pushes to main.
-    # PRs already get signal from the split unit/integration/e2e/contract jobs;
-    # running pytest a second time on every PR doubled the CI bill.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Runs on every PR AND on push to main. The repo is public, so standard
+    # GitHub-hosted runners are free with unlimited minutes — no longer gated to
+    # main to save the bill. The (free) second run buys a coverage gate
+    # (--cov-fail-under) on every PR instead of only at merge.
+    # Least privilege: the job only uploads artifacts and never commits (the QA
+    # badges ride in the `qa-metrics` artifact, regenerated locally by the
+    # maintainer), so it does not need `contents: write`.
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v6

@@ -157,8 +157,12 @@ jobs:
     name: Security / TruffleHog (deep, non-gating)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Only on the nightly schedule / manual dispatch — never gates a PR.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Runs on every event (PR, push, nightly schedule, manual dispatch). The
+    # public repo has unlimited standard-runner minutes, so we surface the deep
+    # `unverified` sweep on PRs too for maximum visibility. It stays
+    # NON-gating (continue-on-error below): `unverified` findings are
+    # credential-shaped strings TruffleHog can't actively verify, so they're for
+    # human review — the gating verified+unknown scan lives in the job above.
 
     steps:
       - uses: actions/checkout@v6
