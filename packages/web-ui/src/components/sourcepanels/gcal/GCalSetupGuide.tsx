@@ -192,11 +192,9 @@ export function GCalSetupGuide() {
             Credentials has a ⤓ icon on the far right). Save it
             anywhere on disk, then drag it into the dashed target above
             — or click the target and pick the file. Estormi validates
-            it has the right shape (must be a Desktop app), writes it to{' '}
-            <code style={codeStyle}>
-              ~/Library/Application Support/Estormi/google_client_secrets.json
-            </code>
-            , and unlocks the "Connect with Google" button.
+            it has the right shape (must be a Desktop app), stores it
+            securely in your <strong>macOS Keychain</strong>, and unlocks
+            the "Connect with Google" button.
           </div>
         </li>
       </ol>

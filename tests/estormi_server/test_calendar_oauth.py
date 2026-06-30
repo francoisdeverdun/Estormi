@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
-import stat
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -234,61 +232,48 @@ async def test_callback_get_exchange_failure_renders_500(client):
 # ── POST /api/calendar/secrets/upload ──────────────────────────────────────
 
 
-def _patch_secrets_path(tmp_path):
-    """Patch the lazily-imported ``_client_secrets_path`` to a temp file."""
-    target = tmp_path / "google_client_secrets.json"
-    return patch(
-        "estormi_ingestion.google_calendar.auth._client_secrets_path",
-        return_value=str(target),
-    ), target
-
-
-async def test_secrets_upload_persists_installed_client(client, tmp_path):
-    p, target = _patch_secrets_path(tmp_path)
+async def test_secrets_upload_persists_installed_client_to_keychain(client):
     content = json.dumps({"installed": {"client_id": "cid", "client_secret": "secret"}})
-    with p:
+    with patch("estormi_ingestion.google_calendar.auth.save_client_secrets") as save:
         resp = await client.post("/api/calendar/secrets/upload", json={"content": content})
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
     assert body["client_type"] == "installed"
-    # File written atomically; the tmp sidecar is cleaned up.
-    assert target.exists()
-    assert not target.with_suffix(".json.tmp").exists()
-    assert json.loads(target.read_text())["installed"]["client_id"] == "cid"
-    # The client secret is PII-grade; the persisted file must be owner-only
-    # (0o600), mirroring the WHOOP token/client files. See gcal_secrets_upload's
-    # O_CREAT 0o600 + fchmod hardening.
-    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+    assert body["stored"] == "keychain"
+    # Forwarded to the keyring store with the uploaded JSON (it unwraps on save).
+    save.assert_called_once()
+    assert save.call_args[0][0] == {"installed": {"client_id": "cid", "client_secret": "secret"}}
 
 
-async def test_secrets_upload_file_is_chmod_600(client, tmp_path):
-    """Dedicated regression for the 0o600 hardening of the uploaded client
-    secrets — mirrors ``test_whoop.py::test_client_file_is_chmod_600``."""
-    p, target = _patch_secrets_path(tmp_path)
+async def test_secrets_upload_writes_no_cleartext_file(client, tmp_path, monkeypatch):
+    """The client secret goes to the keyring only — never a cleartext file in
+    the data dir."""
+    monkeypatch.setenv("ESTORMI_DATA_DIR", str(tmp_path))
     content = json.dumps({"installed": {"client_id": "cid", "client_secret": "secret"}})
-    with p:
-        resp = await client.post("/api/calendar/secrets/upload", json={"content": content})
+    resp = await client.post("/api/calendar/secrets/upload", json={"content": content})
     assert resp.status_code == 200
-    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+    assert not (tmp_path / "google_client_secrets.json").exists()
 
 
-async def test_secrets_upload_overwrites_loose_preexisting_file(client, tmp_path):
-    """A pre-existing world-readable secrets file is replaced by an atomic
-    0o600 tmp-then-rename write — the fresh tmp (O_CREAT 0o600 + fchmod) is
-    os.replace()'d over the loose target, so the result is always 0o600."""
-    p, target = _patch_secrets_path(tmp_path)
-    # Seed a stale, world-readable file at the destination.
-    target.write_text(json.dumps({"installed": {"client_id": "stale", "client_secret": "x"}}))
-    os.chmod(target, 0o644)
-
-    content = json.dumps({"installed": {"client_id": "fresh", "client_secret": "secret"}})
-    with p:
-        resp = await client.post("/api/calendar/secrets/upload", json={"content": content})
+async def test_secrets_upload_forwards_latest_client(client):
+    """Each upload forwards its client to the keyring store (last write wins)."""
+    with patch("estormi_ingestion.google_calendar.auth.save_client_secrets") as save:
+        await client.post(
+            "/api/calendar/secrets/upload",
+            json={
+                "content": json.dumps({"installed": {"client_id": "stale", "client_secret": "x"}})
+            },
+        )
+        resp = await client.post(
+            "/api/calendar/secrets/upload",
+            json={
+                "content": json.dumps({"installed": {"client_id": "fresh", "client_secret": "y"}})
+            },
+        )
     assert resp.status_code == 200
-    assert json.loads(target.read_text())["installed"]["client_id"] == "fresh"
-    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
-    assert not target.with_suffix(".json.tmp").exists()
+    assert save.call_count == 2
+    assert save.call_args[0][0]["installed"]["client_id"] == "fresh"
 
 
 async def test_secrets_upload_rejects_invalid_json(client):

@@ -1880,8 +1880,8 @@ export interface components {
          *     Google Cloud Console straight into the connection panel; the server
          *     validates the shape (it must carry either an ``installed`` or
          *     ``web`` key with ``client_id`` / ``client_secret``) and persists it
-         *     to ``$DATA_DIR/google_client_secrets.json`` — the same path the
-         *     rest of the codebase already reads from.
+         *     to the system keyring — the same store the rest of the codebase
+         *     reads from. The client secret never lands in a cleartext file.
          */
         GCalSecretsBody: {
             /** Content */
