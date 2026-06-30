@@ -5,9 +5,11 @@ Token is stored in the system keyring under service ``estormi.whoop`` key
 ``oauth_token``. If keyring is unavailable (headless / locked) we fall back to
 a chmod-600 file at ``DATA_DIR/.whoop_token``.
 
-App credentials (client_id / client_secret) come from
-``DATA_DIR/whoop_client.json`` — written by the Settings UI when the user
-pastes the two values from their app on developer.whoop.com.
+App credentials (client_id / client_secret) live in the **keyring only**, under
+the same service with key ``client`` — written by the Settings UI when the user
+pastes the two values from their app on developer.whoop.com. They are never
+mirrored to a cleartext file; a one-time migration imports any legacy
+``DATA_DIR/whoop_client.json`` into the keyring and deletes it.
 
 WHOOP, unlike Google, has no SDK we depend on — the flow is hand-rolled with
 ``httpx`` against the documented endpoints:
@@ -23,7 +25,6 @@ out. This is the single sharpest edge of the integration.
 
 from __future__ import annotations
 
-import json
 import os
 import threading
 import time
@@ -39,6 +40,7 @@ log = structlog.get_logger()
 
 SERVICE_NAME = "estormi.whoop"
 TOKEN_KEY = "oauth_token"
+CLIENT_KEY = "client"
 
 AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth"
 TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token"
@@ -73,7 +75,8 @@ def _token_file() -> str:
     return str(estormi_data_dir() / ".whoop_token")
 
 
-def _client_file() -> str:
+def _legacy_client_file() -> str:
+    """Pre-keyring cleartext location, kept only as a one-time migration source."""
     return str(estormi_data_dir() / "whoop_client.json")
 
 
@@ -99,35 +102,34 @@ def delete_token() -> None:
 
 
 def save_client(client_id: str, client_secret: str) -> None:
-    """Persist the app credentials the user pasted from developer.whoop.com."""
-    path = _client_file()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp_path = f"{path}.tmp"
-    # The WHOOP client_id/client_secret is a long-lived app credential — create
-    # the temp 0o600 from the start so it is never world-readable, not even
-    # between write and chmod (mirrors token_store / calendar_oauth). O_TRUNC so
-    # a leftover temp from a crashed prior run self-heals.
-    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"client_id": client_id, "client_secret": client_secret}, f, indent=2)
-    try:
-        os.chmod(tmp_path, 0o600)
-    except OSError:
-        pass
-    os.replace(tmp_path, path)
+    """Persist the app credentials the user pasted from developer.whoop.com.
+
+    Keyring only — the client secret never lands in a cleartext file.
+    """
+    token_store.save_secret(
+        SERVICE_NAME, CLIENT_KEY, {"client_id": client_id, "client_secret": client_secret}
+    )
 
 
 def load_client() -> dict[str, str]:
-    path = _client_file()
-    if not os.path.exists(path):
+    """Read the app credentials from the keyring, migrating a legacy file once.
+
+    Raises ``FileNotFoundError`` when nothing is stored yet and ``ValueError``
+    when the stored value is malformed — the two cases ``client_present``
+    treats as "not configured".
+    """
+    data = token_store.load_secret(SERVICE_NAME, CLIENT_KEY)
+    if data is None:
+        data = token_store.migrate_file_to_keyring(
+            SERVICE_NAME, CLIENT_KEY, legacy_file=_legacy_client_file()
+        )
+    if data is None:
         raise FileNotFoundError(
-            f"whoop_client.json not found at {path}. "
+            "WHOOP client credentials are not set. "
             "Add your WHOOP app's client_id / client_secret in Settings."
         )
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
     if not data.get("client_id") or not data.get("client_secret"):
-        raise ValueError("whoop_client.json is missing client_id or client_secret")
+        raise ValueError("stored WHOOP client credentials are missing client_id or client_secret")
     return {"client_id": str(data["client_id"]), "client_secret": str(data["client_secret"])}
 
 

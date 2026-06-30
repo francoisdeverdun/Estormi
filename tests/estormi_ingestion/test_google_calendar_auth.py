@@ -97,8 +97,8 @@ def test_token_file_resolves_under_data_dir(data_dir):
     assert auth._token_file() == str(data_dir / ".gcal_token")
 
 
-def test_client_secrets_path_resolves_under_data_dir(data_dir):
-    assert auth._client_secrets_path() == str(data_dir / "google_client_secrets.json")
+def test_legacy_client_secrets_path_resolves_under_data_dir(data_dir):
+    assert auth._legacy_client_secrets_path() == str(data_dir / "google_client_secrets.json")
 
 
 # ─── Token storage round-trip ───────────────────────────────────────────────
@@ -227,25 +227,35 @@ def test_delete_token_swallows_revoke_failure(data_dir):
 # ─── Client secrets loading ─────────────────────────────────────────────────
 
 
-def test_load_client_secrets_unwraps_installed_block(data_dir):
+def test_load_client_secrets_migrates_and_unwraps_installed_block(data_dir):
+    # A legacy cleartext file is imported into the keyring on first load and
+    # unwrapped from its ``installed`` envelope.
     payload = {"installed": {"client_id": "cid", "client_secret": "sec"}}
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
+    with open(auth._legacy_client_secrets_path(), "w", encoding="utf-8") as f:
         json.dump(payload, f)
     assert auth._load_client_secrets() == payload["installed"]
+    assert not os.path.exists(auth._legacy_client_secrets_path())
 
 
-def test_load_client_secrets_unwraps_web_block(data_dir):
+def test_load_client_secrets_migrates_and_unwraps_web_block(data_dir):
     payload = {"web": {"client_id": "cid"}}
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
+    with open(auth._legacy_client_secrets_path(), "w", encoding="utf-8") as f:
         json.dump(payload, f)
     assert auth._load_client_secrets() == payload["web"]
 
 
 def test_load_client_secrets_returns_bare_dict_when_unwrapped(data_dir):
     payload = {"client_id": "cid"}
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
+    with open(auth._legacy_client_secrets_path(), "w", encoding="utf-8") as f:
         json.dump(payload, f)
     assert auth._load_client_secrets() == payload
+
+
+def test_save_client_secrets_round_trips_via_keyring(data_dir):
+    # Stored unwrapped in the keyring; readable back without any cleartext file.
+    auth.save_client_secrets({"installed": {"client_id": "cid", "client_secret": "sec"}})
+    assert auth._load_client_secrets() == {"client_id": "cid", "client_secret": "sec"}
+    assert not os.path.exists(auth._legacy_client_secrets_path())
 
 
 def test_load_client_secrets_raises_when_missing(data_dir):
@@ -386,8 +396,7 @@ def test_get_credentials_returns_stale_creds_on_other_refresh_error(data_dir, go
 
 
 def test_build_authorization_url_returns_url_and_state(data_dir, google_flow):
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
-        json.dump({"installed": {"client_id": "cid", "client_secret": "sec"}}, f)
+    auth.save_client_secrets({"installed": {"client_id": "cid", "client_secret": "sec"}})
 
     fake_flow = MagicMock()
     fake_flow.authorization_url.return_value = ("https://accounts.google/auth?x=1", "STATE123")
@@ -414,8 +423,9 @@ def test_build_authorization_url_raises_without_secrets(data_dir, google_flow):
 
 
 def test_exchange_code_success_persists_token(data_dir, google_flow):
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
-        json.dump({"installed": {"client_id": "cid", "client_secret": "sec"}}, f)
+    # Pre-store the client in the keyring so the single set_password below is
+    # unambiguously the token write (not a migration side effect).
+    auth.save_client_secrets({"installed": {"client_id": "cid", "client_secret": "sec"}})
 
     fake_creds = MagicMock()
     fake_creds.token = "newtok"
@@ -440,8 +450,7 @@ def test_exchange_code_success_persists_token(data_dir, google_flow):
 
 
 def test_exchange_code_propagates_fetch_failure(data_dir, google_flow):
-    with open(auth._client_secrets_path(), "w", encoding="utf-8") as f:
-        json.dump({"installed": {"client_id": "cid"}}, f)
+    auth.save_client_secrets({"installed": {"client_id": "cid", "client_secret": "sec"}})
 
     fake_flow = MagicMock()
     fake_flow.fetch_token.side_effect = ValueError("bad code")

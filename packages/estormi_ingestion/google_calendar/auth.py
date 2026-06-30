@@ -5,14 +5,16 @@ Token is stored in the system keyring under service ``estormi.google_calendar``
 key ``oauth_token``. If keyring is unavailable (headless / locked) we fall
 back to a chmod-600 file at ``DATA_DIR/.gcal_token``.
 
-App credentials (client_id / client_secret) come from
-``DATA_DIR/google_client_secrets.json`` — the JSON file you download from
-Google Cloud Console for an "OAuth client ID" of type Desktop.
+App credentials (client_id / client_secret) — the JSON you download from
+Google Cloud Console for an "OAuth client ID" of type Desktop — live in the
+**keyring only**, under the same service with key ``client_secrets`` (the
+``installed``/``web`` envelope unwrapped). They are never mirrored to a
+cleartext file; a one-time migration imports any legacy
+``DATA_DIR/google_client_secrets.json`` into the keyring and deletes it.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
@@ -26,6 +28,7 @@ log = structlog.get_logger()
 
 SERVICE_NAME = "estormi.google_calendar"
 TOKEN_KEY = "oauth_token"
+CLIENT_KEY = "client_secrets"
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 
@@ -33,8 +36,14 @@ def _token_file() -> str:
     return str(estormi_data_dir() / ".gcal_token")
 
 
-def _client_secrets_path() -> str:
+def _legacy_client_secrets_path() -> str:
+    """Pre-keyring cleartext location, kept only as a one-time migration source."""
     return str(estormi_data_dir() / "google_client_secrets.json")
+
+
+def _unwrap_client_secrets(data: dict[str, Any]) -> dict[str, Any]:
+    """Strip Google's ``installed``/``web`` envelope down to the inner client."""
+    return data.get("installed") or data.get("web") or data
 
 
 # ─── Token storage ─────────────────────────────────────────────────────────
@@ -69,16 +78,30 @@ def delete_token() -> None:
 # ─── Credentials / OAuth flow ──────────────────────────────────────────────
 
 
+def save_client_secrets(secrets: dict[str, Any]) -> None:
+    """Persist the OAuth client to the keyring (no cleartext file).
+
+    Accepts either the raw uploaded JSON (with its ``installed``/``web``
+    envelope) or an already-unwrapped inner dict; stores the inner dict.
+    """
+    token_store.save_secret(SERVICE_NAME, CLIENT_KEY, _unwrap_client_secrets(secrets))
+
+
 def _load_client_secrets() -> dict[str, Any]:
-    path = _client_secrets_path()
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"google_client_secrets.json not found at {path}. "
-            "Download an OAuth Desktop client from Google Cloud Console."
+    data = token_store.load_secret(SERVICE_NAME, CLIENT_KEY)
+    if data is None:
+        data = token_store.migrate_file_to_keyring(
+            SERVICE_NAME,
+            CLIENT_KEY,
+            legacy_file=_legacy_client_secrets_path(),
+            transform=_unwrap_client_secrets,
         )
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("installed") or data.get("web") or data
+    if data is None:
+        raise FileNotFoundError(
+            "Google OAuth client is not set. "
+            "Upload an OAuth Desktop client (Google Cloud Console) in Settings."
+        )
+    return data
 
 
 def get_credentials():

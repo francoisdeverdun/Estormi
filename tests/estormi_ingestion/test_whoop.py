@@ -37,13 +37,21 @@ import estormi_ingestion.whoop.sync as whoop_sync
 # ─── Fixtures ──────────────────────────────────────────────────────────────
 
 
-@pytest.fixture
-def data_dir(tmp_path, monkeypatch):
-    """Point the connector's secret storage at a throwaway dir, and force the
-    file fallback by making the keyring import fail — so tests never read or
-    write the real system Keychain."""
-    monkeypatch.setenv("ESTORMI_DATA_DIR", str(tmp_path))
+def _install_memory_keyring(monkeypatch):
+    """Swap ``keyring`` for an in-memory stub so tokens AND client creds
+    round-trip without touching the real system Keychain. Client credentials
+    are keyring-only (no file fallback), so a working keyring is the baseline."""
+    store: dict[tuple[str, str], str] = {}
+    mem = types.ModuleType("keyring")
+    mem.set_password = lambda s, k, v: store.__setitem__((s, k), v)  # noqa: ANN001
+    mem.get_password = lambda s, k: store.get((s, k))  # noqa: ANN001
+    mem.delete_password = lambda s, k: store.pop((s, k), None)  # noqa: ANN001
+    monkeypatch.setitem(sys.modules, "keyring", mem)
+    return store
 
+
+def _break_keyring(monkeypatch):
+    """Make every keyring call raise — used by the token *file-fallback* tests."""
     broken = types.ModuleType("keyring")
 
     def _raise(*_a, **_k):  # noqa: ANN002, ANN003
@@ -53,6 +61,14 @@ def data_dir(tmp_path, monkeypatch):
     broken.get_password = _raise
     broken.delete_password = _raise
     monkeypatch.setitem(sys.modules, "keyring", broken)
+
+
+@pytest.fixture
+def data_dir(tmp_path, monkeypatch):
+    """Point the connector's secret storage at a throwaway dir, with a working
+    in-memory keyring so nothing touches the real system Keychain."""
+    monkeypatch.setenv("ESTORMI_DATA_DIR", str(tmp_path))
+    _install_memory_keyring(monkeypatch)
     return tmp_path
 
 
@@ -135,24 +151,39 @@ def test_valid_access_token_skips_refresh(data_dir, monkeypatch):
 
 
 @pytest.mark.unit
-def test_token_file_is_chmod_600(data_dir):
-    """The fallback token file is owner-only, matching the Google connector."""
+def test_token_file_is_chmod_600(data_dir, monkeypatch):
+    """When the keyring is unavailable the token falls back to an owner-only
+    (0o600) file, matching the Google connector."""
     import os
     import stat
 
+    _break_keyring(monkeypatch)
     whoop_auth.save_token({"access_token": "x", "refresh_token": "y", "expires_at": 0})
     mode = stat.S_IMODE(os.stat(data_dir / ".whoop_token").st_mode)
     assert mode == 0o600
 
 
 @pytest.mark.unit
-def test_client_file_is_chmod_600(data_dir):
-    import os
-    import stat
-
+def test_client_creds_stored_in_keyring_not_on_disk(data_dir):
+    """Client credentials are keyring-only — round-trip via the keyring and
+    never written as a cleartext file in the data dir."""
     whoop_auth.save_client("cid", "csecret")
-    mode = stat.S_IMODE(os.stat(data_dir / "whoop_client.json").st_mode)
-    assert mode == 0o600
+    assert whoop_auth.load_client() == {"client_id": "cid", "client_secret": "csecret"}
+    assert not (data_dir / "whoop_client.json").exists()
+
+
+@pytest.mark.unit
+def test_load_client_migrates_legacy_file_then_deletes_it(data_dir):
+    """A pre-keyring cleartext whoop_client.json is imported into the keyring on
+    first load, then deleted so the secret no longer lingers on disk."""
+    import json
+
+    legacy = data_dir / "whoop_client.json"
+    legacy.write_text(json.dumps({"client_id": "old", "client_secret": "oldsec"}))
+    assert whoop_auth.load_client() == {"client_id": "old", "client_secret": "oldsec"}
+    assert not legacy.exists()
+    # Now served from the keyring even with the file gone.
+    assert whoop_auth.load_client()["client_id"] == "old"
 
 
 # ─── Pagination ─────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  * GoogleCalendarPanel, made interactive: the user can drop the JSON
  * they downloaded from Google Cloud Console onto a target inside the
  * app, or click the target to open a file picker. On success the
- * server saves it to `$DATA_DIR/google_client_secrets.json` and we
+ * server stores it securely in the macOS Keychain and we
  * advance to the "disconnected" state automatically. The five-step
  * walkthrough lives in GCalSetupGuide. Extracted from GoogleCalendarPanel.tsx.
  */
@@ -105,7 +105,7 @@ export function GCalSetupBlock({
           {busy ? 'Saving…' : 'Drop google_client_secrets.json here, or click to pick'}
         </span>
         <span style={{ fontSize: 13, color: 'var(--ink-dim)' }}>
-          Stored at ~/Library/Application Support/Estormi/google_client_secrets.json
+          Stored securely in your macOS Keychain
         </span>
       </button>
 

@@ -43,10 +43,12 @@ They split across two prefixes by concern: **OAuth/account** lives under
 3. *APIs & Services → Credentials → Create credentials → OAuth client ID*.
    - Application type: **Desktop**.
    - Download the JSON.
-4. Save the downloaded file as `google_client_secrets.json` inside the
-   Estormi data directory (defaults to
-   `~/Library/Application Support/Estormi/google_client_secrets.json` on macOS;
-   overridable via the `ESTORMI_DATA_DIR` env var).
+4. In Estormi, open the Google Calendar source panel and drop the downloaded
+   JSON onto the upload target (or click to pick it). Estormi validates it and
+   stores the client securely in the **macOS Keychain** (service
+   `estormi.google_calendar`, key `client_secrets`) — it is never written as a
+   cleartext file. A legacy `google_client_secrets.json` left in the data dir by
+   an older build is migrated into the Keychain on first use, then deleted.
 
 ## 2. Authorise Estormi
 
