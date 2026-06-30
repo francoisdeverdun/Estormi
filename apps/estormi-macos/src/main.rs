@@ -12,6 +12,20 @@ use tauri_plugin_shell::ShellExt;
 const HEALTH_INTERVAL_SECS: u64 = 30;
 const RESTART_GRACE_SECS: u64 = 30;
 const MAX_RESTART_ATTEMPTS: u8 = 3;
+// Initial-startup grace before the watchdog begins counting health failures. A
+// cold Python+uvicorn import plus the first-run migration can run well past the
+// steady-state HEALTH_INTERVAL_SECS, so killing the first sidecar at 30s just
+// churns a process that was about to come up. The grace applies ONLY to the
+// first start: the watchdog polls (without restarting) until /health answers
+// once, then reverts to HEALTH_INTERVAL_SECS monitoring — so crash recovery is
+// unchanged. A library relocated to an external disk gets a longer window: its
+// first read can stall behind a macOS "removable volume" TCC prompt and slow I/O.
+const STARTUP_GRACE_SECS: u64 = 75;
+const STARTUP_GRACE_EXTERNAL_SECS: u64 = 180;
+// While the bundled splash polls the sidecar, surface a "still starting" line
+// once a warm start's window has passed so a slow cold start reads as progress
+// rather than a frozen spinner.
+const SLOW_BOOT_NOTICE_SECS: u64 = 8;
 // If far more wall-clock time than the health interval elapses between ticks,
 // the Mac was asleep (the in-process scheduler can't fire a cron during sleep).
 // Nudge the server to catch up any run missed across the gap.
@@ -91,6 +105,15 @@ fn root_url(port: u16) -> String {
     // / → /app/ when the bundle is present, so this URL is the single
     // canonical entry point regardless of build state.
     format!("http://127.0.0.1:{port}/app/")
+}
+
+/// True when the library lives on a non-boot (typically external/removable)
+/// volume — i.e. mounted under `/Volumes`. The default library sits under the
+/// user's home on the boot volume, so a `/Volumes/...` data dir means the user
+/// relocated it; its first cold read can stall behind a TCC "removable volume"
+/// prompt and slower I/O, so the startup grace and splash copy adapt.
+fn is_external_volume(path: &std::path::Path) -> bool {
+    path.starts_with("/Volumes/")
 }
 
 fn main() {
@@ -348,6 +371,14 @@ fn main() {
             // Start WhatsApp task (Feature 11)
             whatsapp::start(app.handle().clone(), wa_rx, wa_token)?;
 
+            // Whether the resolved library lives on an external/removable volume
+            // (relocated off the boot disk). Drives both the longer startup grace
+            // and the splash copy, since a first cold read there can stall behind
+            // a TCC "removable volume" prompt and slower I/O.
+            let data_dir_external = data_dir(app.handle())
+                .map(|d| is_external_volume(&d))
+                .unwrap_or(false);
+
             // Startup navigation: poll until server ready, then navigate webview
             let app_handle_nav = app.handle().clone();
             let health_url_nav = health_url(port);
@@ -366,6 +397,8 @@ fn main() {
                     .timeout(Duration::from_secs(5))
                     .build()
                     .unwrap_or_else(|_| reqwest::Client::new());
+                let started = std::time::Instant::now();
+                let mut slow_notified = false;
                 loop {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                     let ok = http_nav
@@ -379,6 +412,25 @@ fn main() {
                             let _ = win.eval(format!("location.replace('{root_url_nav}')"));
                         }
                         break;
+                    }
+                    // Past a warm start's window the spinner alone reads as
+                    // "frozen". Drop a one-shot status line onto the splash so a
+                    // slow cold start (especially an external library waking up)
+                    // reads as progress. Targets an element the bundled splash
+                    // renders empty; the eval no-ops until that React tree has
+                    // mounted it, and the loop retries every 300ms regardless.
+                    if !slow_notified && started.elapsed().as_secs() >= SLOW_BOOT_NOTICE_SECS {
+                        slow_notified = true;
+                        if let Some(win) = app_handle_nav.get_webview_window(MAIN_WINDOW_LABEL) {
+                            let msg = if data_dir_external {
+                                "Waking the library on its external disk — this can take a moment…"
+                            } else {
+                                "Waking the memory engine — the first start of the day is slower…"
+                            };
+                            let _ = win.eval(format!(
+                                "var e=document.getElementById('estormi-boot-status');if(e){{e.textContent='{msg}';}}"
+                            ));
+                        }
                     }
                 }
             });
@@ -400,6 +452,35 @@ fn main() {
                     .timeout(Duration::from_secs(HEALTH_INTERVAL_SECS))
                     .build()
                     .unwrap_or_else(|_| reqwest::Client::new());
+                // Initial-startup grace: poll /health frequently but do NOT
+                // restart. A cold start — and especially a relocated external
+                // library behind a removable-volume TCC prompt — can legitimately
+                // take far longer than HEALTH_INTERVAL_SECS to answer once;
+                // killing it at the first 30s tick would just churn a process
+                // about to bind. Break as soon as it answers; if the grace
+                // elapses with no answer the sidecar is wedged, so fall through to
+                // the steady-state loop below, which restarts it. After the first
+                // healthy answer the watchdog reverts to HEALTH_INTERVAL_SECS
+                // monitoring, so crash recovery past startup is unchanged.
+                let startup_cap = if data_dir_external {
+                    STARTUP_GRACE_EXTERNAL_SECS
+                } else {
+                    STARTUP_GRACE_SECS
+                };
+                let startup_deadline =
+                    std::time::Instant::now() + Duration::from_secs(startup_cap);
+                loop {
+                    let ok = http
+                        .get(&health_url_hc)
+                        .send()
+                        .await
+                        .map(|r| r.status().is_success())
+                        .unwrap_or(false);
+                    if ok || std::time::Instant::now() >= startup_deadline {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
                 let mut failures: u8 = 0;
                 let mut last_tick = std::time::SystemTime::now();
                 loop {
