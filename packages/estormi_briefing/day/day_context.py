@@ -427,20 +427,25 @@ async def _fetch_health_chunks(day: date) -> list[dict]:
         },
         timeout=12.0,
     )
-    # Drop cycles that START on or after the briefing day's local midnight. A
-    # WHOOP ``date_ts`` is the cycle START — the evening BEFORE the labelled day
-    # — so the cycle *labelled* the briefing day is stamped the prior evening and
-    # rides through, while a NEXT-day-labelled cycle (stamped ~22:xx of the
-    # briefing day itself) is in the future for this briefing and must not become
-    # ``health[0]`` on a past-day rebuild or a post-midnight run. Compare real
-    # instants against the tz-aware day-start, not raw ISO text.
+    # Drop cycles whose recovery belongs to a LATER wake-day than the briefing
+    # day. A WHOOP ``date_ts`` is the cycle START (sleep onset): the cycle whose
+    # recovery you wake up with on day D starts anywhere from D-1 evening to D's
+    # small hours, while the NEXT day's cycle starts D evening. A local-NOON
+    # cutoff cleanly separates the two — it keeps the "night just passed" cycle
+    # even when sleep began after midnight (a date_ts in the early hours of D),
+    # yet still excludes a next-day cycle (started D evening) that would
+    # otherwise become ``health[0]`` on a past-day rebuild or a post-midnight
+    # run. A plain midnight cutoff wrongly dropped the after-midnight-sleep cycle
+    # and grounded readiness on yesterday's recovery. Compare real instants, not
+    # raw ISO text.
     after, _ = _utc_bounds_for_local_day(day)
     after_dt = _parse_iso_datetime(after)
     if after_dt is not None:
+        cutoff = after_dt + timedelta(hours=12)  # local noon of the briefing day
         chunks = [
             c
             for c in chunks
-            if (_parse_iso_datetime(c.get("date_ts") or c.get("date")) or after_dt) < after_dt
+            if (_parse_iso_datetime(c.get("date_ts") or c.get("date")) or cutoff) < cutoff
         ]
     # Sort by real instant, not raw ISO text: WHOOP is all-UTC today so a string
     # sort happens to agree, but a non-UTC offset (matching the fetch_around fix)

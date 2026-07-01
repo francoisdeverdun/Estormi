@@ -615,7 +615,7 @@ async def test_health_chunks_excludes_next_day_labelled_cycle():
     async def _fake(payload, timeout=12.0):
         return [
             # Labelled D+1 (2026-06-06): starts the evening of D → 2026-06-05T20:00Z.
-            # >= the 2026-06-04T22:00Z Paris-midnight of day D → must be dropped.
+            # >= local NOON of day D (2026-06-05T10:00Z) → must be dropped.
             {"source": "whoop", "text": "cycle-Dplus1", "date_ts": "2026-06-05T20:00:00+00:00"},
             # Labelled D (2026-06-05): starts the evening of D-1 → 2026-06-04T20:00Z.
             # < day-start → kept, newest survivor → health[0].
@@ -650,6 +650,39 @@ async def test_health_chunks_keeps_live_same_day_cycle():
         out = await day_context._fetch_health_chunks(date(2026, 6, 5))
 
     assert [c["text"] for c in out] == ["today", "yesterday"]
+
+
+async def test_health_chunks_keeps_after_midnight_today_cycle():
+    """B1 (#2) regression: when the user falls asleep AFTER midnight, today's
+    WHOOP cycle is stamped in the small hours of the briefing day itself, not the
+    prior evening. A plain midnight cutoff wrongly dropped it and grounded
+    readiness on yesterday's recovery; the local-NOON cutoff keeps it (it is
+    still the night just passed) while excluding a genuine next-day cycle.
+
+    Briefing day D = 2026-06-05 (Paris, UTC+2): local midnight = 2026-06-04T22:00Z,
+    local noon = 2026-06-05T10:00Z."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Next-day cycle (labelled D+1) starts D evening → dropped (>= noon).
+            {"source": "whoop", "text": "tonight", "date_ts": "2026-06-05T20:00:00+00:00"},
+            # Today's cycle — sleep onset AFTER midnight → 2026-06-05T01:16 Paris
+            # (2026-06-04T23:16Z). Past local midnight, but the night just passed:
+            # must survive and lead.
+            {
+                "source": "whoop",
+                "text": "today-after-midnight",
+                "date_ts": "2026-06-04T23:16:00+00:00",
+            },
+            {"source": "whoop", "text": "yesterday", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    texts = [c["text"] for c in out]
+    assert texts[0] == "today-after-midnight"  # kept + leads (was dropped under midnight cutoff)
+    assert "tonight" not in texts  # genuine next-day cycle still excluded
 
 
 # ── day: _days_overdue helper (R2) ───────────────────────────────────────────
