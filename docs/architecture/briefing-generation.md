@@ -99,6 +99,65 @@ or fabricate it. Instead:
   directly — **never an empty section, never a hallucinated one**. `_synthesize_themes`
   only trusts model output that actually follows the `THEME:`/`SOURCE:` structure.
 
+## Deterministic safeguards (code-owned)
+
+Small models drift; these code-side guards keep the drift out of the briefing
+without ever hiding a live item — advisory or fall-back by design, never
+destructive:
+
+- **Cancellation guard.** `_flag_cancelled_events` (`day/day_vision.py`) tags a
+  calendar event `cancelled` when a recent personal/world chunk carries a
+  cancellation cue *and* one of the event's distinctive title tokens. The flag
+  surfaces inline in `build_registry` so a cancelled event never anchors the day
+  as the pivot, and rides into the fact-critic pack. It only flags, never drops.
+- **Reminders line.** `_dont_forget_line` (`compose/build_daily_note.py`) is the
+  deterministic "À ne pas oublier" line — due-today first so a backlog of
+  overdue chores can't fill the cap and evict what's actually due today. A
+  *timed* reminder aged past a 24 h grace before day-start counts as `expired`
+  (`day/day.py:_is_expired`) and is dropped from the list and the overdue count;
+  a date-only chore never expires and keeps rolling. Within the overdue tail,
+  still-live items lead ordered by recency of the due date (`days_overdue`,
+  `day/day.py:_days_overdue`) and each carries a compact "· depuis N j" age
+  affordance — **no collapse, no soft-hide**; every item that fits the cap stays
+  fully shown, only ordering and the affordance change.
+- **Completion-evidence demotion.** `_annotate_completion_evidence`
+  (`day/day_context.py`) scans the recent personal window (mail / imessage /
+  whatsapp, `_COMPLETION_WINDOW_DAYS`) for a strong "done" cue
+  (`_COMPLETION_CUE_RE`: `terminé`/`payé`/`livré`/`réglé`/…) co-occurring with
+  one of the overdue reminder's **distinctive** title tokens
+  (`_distinctive_title_tokens`, mirroring `day_vision`'s correlation tokenizer);
+  a match sets `resolved_evidence=True`. `_dont_forget_line` then renders that
+  reminder plain and last instead of red "⚠ en retard" — still **listed, never
+  hidden**. The distinctive-token gate plus the narrow cue set keep a generic
+  "fait"/"payé" in unrelated chatter from ever demoting a live errand.
+- **Promotional-mail correlation guard.** `_is_promotional_chunk`
+  (`day/day_vision.py`) marks a `source == 'mail'` chunk carrying an exact
+  bulk/legal marker (`_PROMOTIONAL_MARKERS`: unsubscribe/"voir en ligne"/
+  "newsletter"/finance-disclaimer boilerplate) as a mass mailing. `_correlate_event`
+  bars such a chunk from **anchoring** a correlation — so a bulk marketing mail
+  can no longer be recast as tailored advice against a personal reminder — but
+  never deletes it; it can still surface elsewhere. This is the **briefing-time
+  heuristic**; an ingestion-level List-Unsubscribe/bulk-domain schema flag is a
+  separate follow-up.
+- **World-news re-anchoring & recency.** In the world path (`compose/synthesis.py`),
+  `_reanchor_relative_time` neutralises relative-time deictics ("ce soir",
+  "aujourd'hui", …) on any bullet whose resolved `[SOURCE: … | date]` is strictly
+  before the briefing day, replacing them with the absolute source day so a D-1
+  item isn't read as tonight; a same-day bullet is untouched.
+  `_dedup_impact_clauses` collapses a bullet's repeated "→ Impact:" clauses down
+  to the first plus any that add new wording. In `io/world_corpus.py`,
+  `_apply_content_recency_floor` drops a daily-block chunk whose **own content
+  date** is more than `_WORLD_CONTENT_MAX_AGE_DAYS` (10 d) before the briefing
+  day — a late-ingested months-old item that slipped past the `date_ts` window —
+  while undated/recent chunks always pass through.
+- **Audio narration.** The spoken edition (`io/delivery.py`) re-voices the body
+  for TTS, then `narration_regressed` (`lint/narration_lint.py`) falls back to
+  reading the verbatim body when the rewrite has grossly lost content (far
+  shorter, or dropped the title / every clock time / every source). It never
+  falls back to *no* audio. Interpunct list separators become comma pauses and
+  trailing source attributions are stripped for the ear
+  (`memory_core/tts_local.py`).
+
 ## Ownership (generic)
 
 `_format_action` carries each event's `group_type`. In the actionable schedule
@@ -116,6 +175,40 @@ issues the loop regenerates with `format_critic_feedback` injected and keeps the
 fewest-issue draft (`briefing_repair_attempts`, default 1, cap 3). The critic
 must **trust graph-anchored links** — a cross-source connection that names a
 shared place/person/project is the briefing's purpose, not a fusion error.
+
+An unreachable critic is made **visible, never silently "approved"**: both
+`critique_briefing` and `fact_critique_briefing` set `critic_error` when a call
+raises or returns nothing usable, and `_run_critic_repair` turns that into a
+non-blocking `critic_unavailable` advisory issue (it does not count toward the
+repair budget). A cancelled/postponed event is fed to the fact-critic as an
+`[ANNULÉ]` title marker (`_fact_pack_rows`), and the WhatsApp evidence block is
+now dropped **last** — not first — under `FACT_PACK_MAX_CHARS`, so the source
+most likely to contradict a stale draft still reaches the critic.
+
+**Objective↔body coherence (advisory).** Each repair iteration also runs
+`objective_body_divergence` (`lint/vision_lint.py`) on the candidate's own
+objective/MY-DAY split (via `briefing_fields`): it flags one
+`objective_body_divergence` issue only when the objective is built on distinctive
+proper-noun/coded anchors ("Solidays", "PSCA-…") that the body's through-line
+never mentions. The bar is high — it stays silent unless *every* such anchor is
+absent from the body — and it is purely advisory: it feeds a repair attempt like
+any other lint issue and **never blocks shipping**.
+
+**Severe-issue soft-gate (`_SEVERE_ISSUE_TYPES`).** After the repair loop,
+`_run_critic_repair` partitions the final unresolved issues, returning the subset
+whose type is a high-confidence fact-critic verdict —
+`status_polarity_inverted`, `relation_inverted`, `fact_misattributed` — as
+`severe_issues`. Style, structure lint, the advisory coherence issue, and
+`critic_unavailable` are deliberately excluded (`unsupported_claim` too, as the
+softest fact type). In `run()`, if a severe issue survives **and** the vault
+already holds a briefing (`_previous_briefing_exists`, reusing `vault_sync.list_briefings`),
+the run **preserves the previous briefing** rather than overwrite it with a draft
+known to state something false, and records `knowledge_last_run_status="error"`
+naming the issue — the same degrade-soft contract as the collapse guard. If no
+previous briefing exists, the flawed draft **ships anyway** (a briefing wrong on
+one fact beats leaving the user with nothing) and the contradiction is logged.
+The gate is keyed only on those three fact types; style never withholds a
+briefing.
 
 ## Local vs cloud
 

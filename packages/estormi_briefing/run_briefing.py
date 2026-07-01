@@ -18,7 +18,6 @@ state in ``runtime``.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -69,7 +68,7 @@ from estormi_briefing.io.world_corpus import (
     _group_world_items,
 )
 from estormi_briefing.lint.fact_lint import allowed_date_set, lint_dates, lint_weekdays
-from estormi_briefing.lint.vision_lint import lint_vision
+from estormi_briefing.lint.vision_lint import lint_vision, objective_body_divergence
 from estormi_briefing.llm import runtime
 from estormi_briefing.llm.bestof import TimeBudget
 from estormi_briefing.llm.llm_dispatch import _HAIKU_MODEL
@@ -81,6 +80,7 @@ from estormi_briefing.llm.runtime import _get_setting, _set_setting
 # briefing reads them back from the DB. ``source_key`` maps a stored world
 # chunk's ``source_id`` prefix back to its config entry.
 from estormi_ingestion.knowledge.ingest_world import source_key, validate_sources
+from estormi_ingestion.shared.delivery.vault_sync import list_briefings as _vault_list_briefings
 from estormi_ingestion.shared.delivery.vault_sync import push_briefing as _vault_push_briefing
 from estormi_ingestion.shared.paths import estormi_data_dir, estormi_db_path
 from memory_core.sanitizer import sanitize_chunk
@@ -90,6 +90,17 @@ DATA_DIR = str(estormi_data_dir())
 DB_PATH = estormi_db_path()
 
 PIPELINE_BUDGET_S = float(os.getenv("BRIEFING_WALL_CLOCK_BUDGET_S", "0"))
+
+# High-confidence fact-critic verdicts: a draft that inverts a relation, flips a
+# status, or misattributes a fact says something the data contradicts. These —
+# and ONLY these — gate the degrade-soft overwrite guard below (C1). Style,
+# structure lint, advisory coherence and ``critic_unavailable`` never gate: they
+# are best-effort quality nudges, not falsehoods, so they must never block a
+# ship. ``unsupported_claim`` is deliberately excluded — it is the softest
+# fact-critic type (a claim merely unbacked, not provably wrong).
+_SEVERE_ISSUE_TYPES = frozenset(
+    {"status_polarity_inverted", "relation_inverted", "fact_misattributed"}
+)
 
 # When launched by the MCP server, jobs.py redirects this process's stdout
 # and stderr into the briefing log file, so a FileHandler here would double
@@ -413,7 +424,7 @@ async def _run_critic_repair(
     news_digest: str,
     provider: str,
     model: str,
-) -> tuple[str, dict]:
+) -> tuple[str, dict, list[dict]]:
     """Critic→repair loop (best-of-N on the day-vision).
 
     Generate the vision, critique it; if the critic flags issues and repair
@@ -422,8 +433,12 @@ async def _run_critic_repair(
     rather than fusing several — it costs one extra vision+critic pass per
     repair (the user opts into the longer run for the quality gain). Disable
     with briefing_repair_attempts=0; capped at 3. Persists the final critique
-    and returns ``(vision_html, vision_rows)`` — the rows carry the located
-    events the timeline strip is rendered from.
+    and returns ``(vision_html, vision_rows, severe_issues)`` — the rows carry
+    the located events the timeline strip is rendered from, and
+    ``severe_issues`` is the subset of the FINAL unresolved issues whose type is
+    in :data:`_SEVERE_ISSUE_TYPES` (high-confidence factual contradictions the
+    caller's overwrite guard acts on). Empty when the best draft is factually
+    clean — style/lint/advisory issues never appear here.
     """
     home_location = await _get_setting(db, "briefing_home_location", "Paris, France")
     extractor_model = await _get_setting(db, "briefing_extractor_model", _HAIKU_MODEL)
@@ -524,6 +539,15 @@ async def _run_critic_repair(
         #   · fact-critic — inverted relations/statuses and misattributed
         #     facts, verified against the very rows the writer saw.
         lint_issues = lint_vision(candidate, language=runtime.language)
+        # Coherence (advisory): flag when the objective is built on a distinctive
+        # entity/code the MY DAY body never mentions — a divergence the repair
+        # pass can realign. Reuse the note-builder's own objective/body split so
+        # the check sees exactly what the renderer will. Never blocks shipping;
+        # rides the same best-draft path as every other lint issue.
+        _fields = briefing_fields(candidate)
+        lint_issues += objective_body_divergence(
+            _fields["objective"], _fields["myDay"], language=runtime.language
+        )
         date_issues = (
             lint_dates(candidate, allowed_date_set(vision_rows, news_digest, today))
             if vision_rows
@@ -531,16 +555,36 @@ async def _run_critic_repair(
         )
         date_issues += lint_weekdays(candidate, today)
         fact_issues: list[dict] = []
+        fact_result: dict = {}
         if fact_enabled and vision_rows:
-            fact_issues = (
-                await fact_critique_briefing(candidate, vision_rows, today, _fact_llm)
-            ).get("issues") or []
+            fact_result = await fact_critique_briefing(candidate, vision_rows, today, _fact_llm)
+            fact_issues = fact_result.get("issues") or []
             if fact_issues:
                 log.info("fact critic: %d issue(s)", len(fact_issues))
         merged = [*lint_issues, *date_issues, *fact_issues, *(cand_critique.get("issues") or [])]
         if merged:
             cand_critique = {**cand_critique, "issues": merged, "approved": False}
+        # Real-defect count drives the repair loop; a critic outage is advisory
+        # only. Count them before appending the advisory so an unreachable
+        # critic never forces the loop to burn its full repair budget on a draft
+        # that is otherwise clean.
         n_issues = len(cand_critique.get("issues") or [])
+        # Observability: when a critic ran but returned nothing usable (outage,
+        # truncated JSON), surface a non-blocking `critic_unavailable` issue so
+        # the run doesn't report an unchecked briefing as silently approved.
+        for _critic, _res in (("structural", cand_critique), ("fact", fact_result)):
+            if _res.get("critic_error"):
+                log.warning("briefing critic advisory: %s critic unavailable", _critic)
+                cand_critique = {
+                    **cand_critique,
+                    "issues": [
+                        *(cand_critique.get("issues") or []),
+                        {
+                            "type": "critic_unavailable",
+                            "excerpt": f"{_critic}: {_res['critic_error']}",
+                        },
+                    ],
+                }
         log.info(
             "day_vision attempt %d/%d: %d critic issue(s)",
             attempt + 1,
@@ -561,10 +605,14 @@ async def _run_critic_repair(
     # without regenerating the draft. No-op when the line is already a steer.
     if vision_html and provider == "local":
         vision_html = await _condense_readiness_line(vision_html, provider, model)
-        # Enforce tutoiement: the advisory lint+repair loop ships a best draft
-        # that may still vouvoie; this focused pass fixes only the address.
+    # Enforce tutoiement for EVERY provider: the advisory lint+repair loop ships
+    # a best draft that may still vouvoie regardless of who composed it. This
+    # focused pass fixes only the address and self-skips when there is nothing to
+    # fix (zero prose defects), so it is a no-op on a clean cloud draft too.
+    if vision_html:
         vision_html = await _repair_voice(vision_html, provider, model)
 
+    severe_issues: list[dict] = []
     if vision_html:
         final_issues = critique.get("issues") or []
         if final_issues:
@@ -574,11 +622,22 @@ async def _run_critic_repair(
                     issue.get("type", "unknown"),
                     issue.get("excerpt", ""),
                 )
+            # Partition off the high-confidence factual contradictions (C1). The
+            # caller degrades softly on these — never on style, lint, or the
+            # advisory coherence/critic-unavailable issues, which are quality
+            # nudges, not falsehoods.
+            severe_issues = [
+                issue for issue in final_issues if issue.get("type") in _SEVERE_ISSUE_TYPES
+            ]
+            if severe_issues:
+                log.warning(
+                    "briefing critic: %d severe fact issue(s) unresolved after repair",
+                    len(severe_issues),
+                )
         else:
             log.info("briefing critic: approved (no issues)")
-        await _put_setting(db, "knowledge_last_critic", json.dumps(critique)[:2000])
 
-    return vision_html, last_rows
+    return vision_html, last_rows, severe_issues
 
 
 def _render_timeline(vision_rows: dict, lang_code: str) -> str:
@@ -594,7 +653,17 @@ def _render_timeline(vision_rows: dict, lang_code: str) -> str:
             end = datetime.fromisoformat(str(e.get("end") or ""))
         except ValueError:
             continue
-        events.append({"title": str(e.get("title") or ""), "start": start, "end": end})
+        # Carry the all-day flag through: an all-day entry parses to a midnight
+        # datetime, so only this flag (not the timestamp) tells the renderer to
+        # label it "Toute la journée" and pin it to the top of the strip.
+        events.append(
+            {
+                "title": str(e.get("title") or ""),
+                "start": start,
+                "end": end,
+                "all_day": bool(e.get("all_day")),
+            }
+        )
     if not events:
         return ""
     day = events[0]["start"].astimezone(LOCAL_TZ).date()
@@ -893,7 +962,7 @@ async def run(config_path: Path | None = None) -> str:
             persisted_status, persisted_summary = "ok", summary
             return summary
 
-        vision_html, vision_rows = await _run_critic_repair(
+        vision_html, vision_rows, severe_issues = await _run_critic_repair(
             db, today, actions, news_digest, provider, model
         )
         tl_html = _render_timeline(vision_rows, lang_code)
@@ -913,6 +982,41 @@ async def run(config_path: Path | None = None) -> str:
                 runtime._run_metrics.items_included = 0
             persisted_status, persisted_summary = "error", summary[:200]
             return summary
+
+        # Severe-issue soft-gate (C1): the best draft still carries a
+        # high-confidence factual contradiction (inverted relation/status, or a
+        # misattributed fact) the repair loop could not resolve. Degrade softly,
+        # mirroring the collapse guard: if a previous vault briefing already
+        # exists, keep it rather than overwrite it with a draft we know states
+        # something false — flag the run an error naming the issue. If NO
+        # previous briefing exists, SHIP the flawed draft anyway: a briefing
+        # that is wrong on one fact beats leaving the user with nothing. Gated
+        # ONLY on the three severe fact types; style/lint/advisory never reach
+        # here.
+        if severe_issues and _previous_briefing_exists():
+            kinds = ", ".join(sorted({str(i.get("type") or "?") for i in severe_issues}))
+            summary = (
+                f"Briefing suppressed: {len(severe_issues)} unresolved factual "
+                f"issue(s) ({kinds}) — previous briefing preserved"
+            )
+            log.error(summary)
+            await _put_setting(db, "knowledge_last_run_status", "error")
+            await _put_setting(db, "knowledge_last_run_summary", summary[:200])
+            if runtime._run_metrics is not None:
+                runtime._run_metrics.items_considered = len(items)
+                runtime._run_metrics.items_included = 0
+            persisted_status, persisted_summary = "error", summary[:200]
+            return summary
+        if severe_issues:
+            # No previous briefing to fall back on — ship the flawed draft (never
+            # leave the user with nothing) but log the unresolved contradictions.
+            kinds = ", ".join(sorted({str(i.get("type") or "?") for i in severe_issues}))
+            log.warning(
+                "briefing ships with %d unresolved severe issue(s) (%s) — no previous "
+                "briefing to fall back on",
+                len(severe_issues),
+                kinds,
+            )
 
         summary = await _persist_and_deliver(
             db,
@@ -970,6 +1074,21 @@ def _refresh_mode() -> str:
     """The launcher's refresh knob — ``"health"`` runs the wake-time readiness
     refresh (``refresh_health``) instead of the full pipeline."""
     return os.getenv("ESTORMI_BRIEFING_REFRESH", "").strip().lower()
+
+
+def _previous_briefing_exists() -> bool:
+    """Whether the vault already holds a briefing to fall back on (C1).
+
+    Reuses the vault's own listing so no path logic is duplicated here. On any
+    failure — an unconfigured or unreadable vault — returns ``False``, the SAFE
+    default: an inability to confirm a fallback must never let the severe-issue
+    guard withhold a briefing and leave the user with nothing.
+    """
+    try:
+        return bool(_vault_list_briefings())
+    except Exception as exc:  # noqa: BLE001 — degrade-soft: unknown → ship
+        log.warning("previous-briefing check failed (%s) — treating as none", exc)
+        return False
 
 
 async def _decide_notify(db) -> bool:

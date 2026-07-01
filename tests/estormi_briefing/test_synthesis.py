@@ -349,6 +349,29 @@ async def test_synthesize_news_falls_back_when_model_omits_citations():
     assert "[SOURCE: Le Monde | 2026-05-15]" in result
 
 
+async def test_synthesize_news_reanchors_stale_relative_time_end_to_end():
+    """W1 fires inside the real pass chain: a D-1 bullet loses "ce soir"."""
+    items = [
+        {
+            "axis": "news",
+            "source_label": "L'Équipe",
+            "bullets": ["- Match France-Irak. (L'Équipe, 2026-06-30)"],
+        }
+    ]
+
+    async def fake_llm(prompt, provider, model, **kwargs):
+        # Model writes the source's present tense; code re-anchors it since the
+        # citation resolves to 2026-06-30, the day before the briefing.
+        return "- Match France-Irak ce soir (23h). [1]"
+
+    with patch("estormi_briefing.llm.runtime._llm_call", side_effect=fake_llm):
+        result = await _synthesize_news(items, "2026-07-01", "claude-cli", "opus")
+
+    assert "ce soir" not in result
+    assert "le 2026-06-30" in result
+    assert "[SOURCE: L'Équipe | 2026-06-30]" in result
+
+
 def test_fallback_themes_from_items_is_clean_and_sourced():
     from estormi_briefing.compose.prompts import fallback_themes_from_items
 
@@ -626,3 +649,79 @@ async def test_impact_floor_noop_when_satisfied_or_no_profile():
     ):
         bare = "- Une actu. [SOURCE: S | 2026-06-12]"
         assert await _ensure_impact_floor(bare, "local", "t", cap=2) == bare
+
+
+# ── W1: relative-time re-anchoring ────────────────────────────────────────────
+
+
+def test_reanchor_relative_time_neutralises_stale_deictic():
+    from estormi_briefing.compose.synthesis import _reanchor_relative_time
+
+    # Bullet resolved to the DAY BEFORE the briefing day — "ce soir" is stale.
+    text = "- Match France-Irak ce soir (23h). [SOURCE: L'Équipe | 2026-06-30]"
+    out = _reanchor_relative_time(text, "2026-07-01")
+    assert "ce soir" not in out
+    assert "le 2026-06-30" in out
+    assert "[SOURCE: L'Équipe | 2026-06-30]" in out  # the marker is untouched
+
+
+def test_reanchor_relative_time_keeps_same_day_deictic():
+    from estormi_briefing.compose.synthesis import _reanchor_relative_time
+
+    # Same-day bullet — the deixis is still correct, leave it alone.
+    text = "- Match France-Irak ce soir (23h). [SOURCE: L'Équipe | 2026-07-01]"
+    assert _reanchor_relative_time(text, "2026-07-01") == text
+    # A future-dated bullet is likewise untouched.
+    future = "- Sommet demain à Bruxelles. [SOURCE: Le Monde | 2026-07-02]"
+    assert _reanchor_relative_time(future, "2026-07-01") == future
+    # A bullet with no resolvable date passes through unchanged.
+    undated = "- Rien de daté ce soir."
+    assert _reanchor_relative_time(undated, "2026-07-01") == undated
+
+
+def test_reanchor_relative_time_covers_multiple_deictics():
+    from estormi_briefing.compose.synthesis import _reanchor_relative_time
+
+    text = "- Vote hier, résultats aujourd'hui, débat demain. [SOURCE: Le Monde | 2026-06-25]"
+    out = _reanchor_relative_time(text, "2026-07-01")
+    for stale in ("hier", "aujourd'hui", "demain"):
+        assert stale not in out
+    assert out.count("le 2026-06-25") == 3
+
+
+# ── W3: doubled "→ Impact:" dedup ─────────────────────────────────────────────
+
+
+def test_dedup_impact_clauses_collapses_repeated_clause():
+    from estormi_briefing.compose.synthesis import _dedup_impact_clauses
+
+    line = (
+        "- La BCE relève son taux. → Impact: ton crédit se renchérit. "
+        "→ Impact: ton crédit se renchérit. [SOURCE: Le Monde | 2026-06-12]"
+    )
+    out = _dedup_impact_clauses(line)
+    assert out.count("→ Impact:") == 1
+    assert "ton crédit se renchérit" in out
+    assert out.endswith("[SOURCE: Le Monde | 2026-06-12]")
+
+
+def test_dedup_impact_clauses_leaves_single_clause_untouched():
+    from estormi_briefing.compose.synthesis import _dedup_impact_clauses
+
+    line = "- La BCE relève son taux. → Impact: ton crédit se renchérit. [SOURCE: x | 2026-06-12]"
+    assert _dedup_impact_clauses(line) == line
+    # A bare bullet with no impact is likewise untouched.
+    bare = "- Une actu sans impact. [SOURCE: x | 2026-06-12]"
+    assert _dedup_impact_clauses(bare) == bare
+
+
+def test_dedup_impact_clauses_keeps_distinct_clauses():
+    from estormi_briefing.compose.synthesis import _dedup_impact_clauses
+
+    # Two genuinely different consequences — both kept, single prefix.
+    line = (
+        "- Actu. → Impact: ton épargne baisse. → Impact: ton loyer grimpe. [SOURCE: x | 2026-06-12]"
+    )
+    out = _dedup_impact_clauses(line)
+    assert out.count("→ Impact:") == 1
+    assert "ton épargne baisse" in out and "ton loyer grimpe" in out

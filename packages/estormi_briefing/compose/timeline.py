@@ -126,7 +126,10 @@ def timeline_html(events: list[dict], slots: list[dict], labels: dict[str, str])
         if not title:
             continue  # a row with no label is dead weight on the strip
         start, end = _as_dt(event.get("start")), _as_dt(event.get("end"))
-        if start is None:
+        # A calendar all-day entry still parses to a midnight datetime, so the
+        # `all_day` flag — not the timestamp — is what marks it: an all-day event
+        # gets the "All day" label and pins to the top like a no-time row.
+        if start is None or event.get("all_day"):
             key: tuple = (0,)
             when = _esc(str(labels.get("all_day", "All day")))
         else:

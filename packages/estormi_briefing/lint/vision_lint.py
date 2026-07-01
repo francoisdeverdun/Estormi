@@ -30,6 +30,12 @@ _BULLET_RE = re.compile(r"^\s*[-•]\s+")
 # Tolerate trailing punctuation after the marker — "… [src: gcal · 12 Jun]."
 # is sourced, not a violation.
 _SRC_RE = re.compile(r"\[src:[^\]]+\]\s*[.…)]?\s*$")
+# A ``[src: …]`` marker with substantive text still running after it on the same
+# line — the model buried the attribution mid-sentence instead of closing on it
+# ("… la revue [src: agenda · 12 juin] débouche sur le point leadership"). Only
+# a real word after the bracket counts; trailing punctuation/quotes/whitespace
+# are a legitimate close.
+_SRC_MID_SENTENCE_RE = re.compile(r"\[src:[^\]]+\][»”\")\s.,;:…]*[0-9A-Za-zÀ-ÿ]")
 # The structure labels are the prompt's scaffolding — "MY DAY" names a section
 # in the instructions, it must never appear in the output itself.
 _MY_DAY_LABEL_RE = re.compile(r"(?mi)^[*#>\s-]*MY DAY\b|\*\*MY DAY\*\*")
@@ -52,17 +58,65 @@ _ENGLISH_MARKERS = re.compile(
 # is excluded (its "vous" is not an address), and a single slip is enough to
 # flag: mixed tu/vous reads worse than either alone.
 _FRENCH_FORMAL_RE = re.compile(r"\b(votre|vos)\b|(?<!rendez-)\bvous\b", re.IGNORECASE)
+# Vouvoiement also hides in the plural imperative, which carries no "vous"
+# pronoun to catch ("Réservez l'énergie", "Planifiez la revue"). A blanket
+# ``\w+ez\b`` would eat innocent words (assez, chez, nez, aptamerez… and every
+# 2nd-person-plural non-imperative), so this is an explicit, curated list of
+# the advice verbs the writer actually drifts into — the same verbs
+# ``_repair_voice`` is told to singularise.
+_FRENCH_IMPERATIVE_VOUS_RE = re.compile(
+    r"(?i)\b(planifiez|v[ée]rifiez|pensez|r[ée]servez|contactez|notez|pr[ée]voyez|"
+    r"pr[ée]parez|gardez|prenez|anticipez|priorisez|bloquez|appelez|relisez|"
+    r"envoyez|confirmez|validez|organisez|profitez|[ée]vitez|assurez|veillez|"
+    r"gérez|g[ée]rez|surveillez|programmez|planchez|traitez|terminez|finalisez)\b"
+)
 
 # Purple prose a small model slips into ("avant que l'après-midi ne scelle leur
 # sort", "n'admettent aucun délai"). Specific phrasings only, to avoid flagging
 # legitimate urgency; an advisory nudge into the same repair pass.
+#
+# The second alternative catches the personification tic — a day/meeting/review
+# "scelle/trace/révèle/commande/tranche" its object ("la journée scelle la
+# boucle", "la réunion tranche la trajectoire"). It excludes the literal deal-
+# sealing sense ("sceller un accord/pacte/contrat/alliance"), which is plain
+# language, not melodrama.
+_MELODRAMA_VERB_RE = re.compile(
+    r"(?i)\b(?:scelle|scellent|trace|tracent|r[ée]v[èe]le|r[ée]v[èe]lent|"
+    r"commande|commandent|tranche|tranchent)\s+"
+    r"(?!(?:un|une|le|la|les|l')\s*(?:accord|pacte|contrat|alliance|trait[ée])\b)"
+    r"(?:le|la|les|leur|son|sa|ses|l'|un|une|ce|cette)\b"
+)
 _MELODRAMA_RE = re.compile(
     r"(?i)\bscell\w+\s+(?:le|la|leur|son|sa)\s+sort\b|n'admet\w*\s+aucun\s+d[ée]lai"
 )
 
 # MY DAY is "the heart of the briefing" (~150-200 words per the prompt); under
 # this floor the model almost certainly truncated or skipped the synthesis.
+#
+# The floor stays at 60 rather than the 80 the review floated: MY DAY quality
+# is the LLM critic's job, and a hard bump would flag genuinely-tight days into
+# a needless repair pass. Self-repetition — the concrete 9.2 failure, where a
+# small model re-verbalises the same content bigram after bigram — is caught by
+# the (advisory) repeated-bigram check below instead.
 _MY_DAY_MIN_WORDS = 60
+
+# Function words carry no content, so a repeated ("de", "la") bigram means
+# nothing — only content bigrams count toward self-repetition.
+_STOPWORDS_FR = frozenset(
+    """
+    le la les un une des du de d au aux à a et ou où que qui quoi dont ce cet
+    cette ces son sa ses leur leurs mon ma mes ton ta tes notre nos votre vos
+    en dans sur sous par pour avec sans vers chez entre est sont être été fait
+    faire il elle ils elles on tu te toi se sy ne pas plus tout tous toute
+    toutes ça cela comme si mais donc car puis alors déjà encore aussi bien
+    the and with your for this that from into onto their his her its
+    """.split()
+)
+# A MY DAY paragraph that repeats several distinct content-word bigrams verbatim
+# is re-verbalising itself, not synthesising. Advisory only; the threshold is
+# high enough that ordinary prose (which rarely repeats a two-content-word span
+# at all) never trips it.
+_MY_DAY_REPEAT_BIGRAM_MIN = 3
 
 # Numbered-list line ("1. …" / "2) …") — the bullet ban's favourite loophole.
 _NUMBERED_LINE_RE = re.compile(r"^\s*\d+[.)]\s+")
@@ -87,6 +141,30 @@ _CLOCK_TOKEN_RE = re.compile(r"\b\d{1,2}\s*[h:]\s*\d{2}\b|\b\d{1,2}\s*h\b", re.I
 
 def _excerpt(line: str) -> str:
     return line.strip()[:200]
+
+
+_WORD_RE = re.compile(r"[0-9A-Za-zÀ-ÿ']+")
+
+
+def repeated_content_bigrams(text: str) -> int:
+    """How many distinct content-word bigrams ``text`` repeats verbatim.
+
+    A bigram counts only when BOTH its words are content words (stopwords carry
+    no signal), and only distinct repeated bigrams are tallied — so a paragraph
+    that says "revue partenaire … revue partenaire … revue partenaire" scores 1,
+    not 2. Ordinary synthesising prose repeats a content bigram rarely; a small
+    model re-verbalising itself repeats several. Advisory signal only.
+    """
+    words = [w.lower() for w in _WORD_RE.findall(text or "") if w.lower() not in _STOPWORDS_FR]
+    seen: set[tuple[str, str]] = set()
+    repeated: set[tuple[str, str]] = set()
+    for a, b in zip(words, words[1:]):
+        bigram = (a, b)
+        if bigram in seen:
+            repeated.add(bigram)
+        else:
+            seen.add(bigram)
+    return len(repeated)
 
 
 def readiness_line_span(text: str) -> tuple[int, int, str] | None:
@@ -162,6 +240,11 @@ def lede_issues(lede: str) -> list[str]:
         )
     if _LEDE_TIMESPAN_RE.search(text):
         issues.append("opens on a bare time-span — lead with the named pivot, not the day's hours")
+    if _MELODRAMA_RE.search(text) or _MELODRAMA_VERB_RE.search(text):
+        issues.append(
+            "melodramatic personification (a day/meeting 'scelle/tranche/commande'…) — "
+            "state what happens soberly, don't dramatise"
+        )
     if len(text) > 240:
         issues.append("too long for an opening line")
     return issues
@@ -304,6 +387,18 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
             )
             break
 
+    for line in my_day.splitlines():
+        if _SRC_MID_SENTENCE_RE.search(line):
+            issues.append(
+                {
+                    "type": "src_marker_mid_sentence",
+                    "excerpt": _excerpt(line)
+                    + " — the [src: …] attribution belongs at the END of its sentence; "
+                    "don't bury it mid-sentence with more prose running after it",
+                }
+            )
+            break
+
     span = readiness_line_span(body)
     if span and readiness_has_figure_dump(span[2]):
         issues.append(
@@ -332,12 +427,21 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
         for ln in my_day.splitlines()
         if not re.match(r"^[*#>\s-]*(READINESS|OBJECTIVE)\s*\**\s*:", ln.strip(), re.IGNORECASE)
     ]
-    if 0 < len(" ".join(prose_lines).split()) < _MY_DAY_MIN_WORDS:
+    prose_text = " ".join(prose_lines)
+    if 0 < len(prose_text.split()) < _MY_DAY_MIN_WORDS:
         issues.append(
             {
                 "type": "my_day_too_thin",
                 "excerpt": "MY DAY is only a few sentences — develop the day's threads "
                 "(~150-200 words of connected prose)",
+            }
+        )
+    elif repeated_content_bigrams(prose_text) >= _MY_DAY_REPEAT_BIGRAM_MIN:
+        issues.append(
+            {
+                "type": "my_day_self_repetition",
+                "excerpt": "MY DAY re-verbalises itself — the same phrases recur verbatim; "
+                "synthesise the day's threads once, don't restate them",
             }
         )
 
@@ -354,7 +458,7 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
             )
 
     if language.lower() == "french":
-        mel = _MELODRAMA_RE.search(body)
+        mel = _MELODRAMA_RE.search(body) or _MELODRAMA_VERB_RE.search(body)
         if mel:
             issues.append(
                 {
@@ -369,7 +473,7 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
             # one is the sender's wording, not the briefing's address.
             if ln.lstrip().startswith(">"):
                 continue
-            if _FRENCH_FORMAL_RE.search(ln):
+            if _FRENCH_FORMAL_RE.search(ln) or _FRENCH_IMPERATIVE_VOUS_RE.search(ln):
                 issues.append(
                     {
                         "type": "formal_address",
@@ -381,3 +485,74 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
                 break
 
     return issues
+
+
+# ── coherence lint (D-E) ────────────────────────────────────────────────────────
+# The objective is the day's through-line; the MY DAY body is what actually gets
+# written. When the objective is built on a distinctive entity ("Solidays",
+# "Meria PSCA-…") that the body's narrative never mentions, the two have diverged
+# and the objective is describing a different day. Advisory only — it feeds one
+# repair attempt, never blocks shipping.
+#
+# A "distinctive anchor" is a proper-noun-quality token: a capitalised word past
+# the sentence start, an ALL-CAPS/mixed token, or one carrying a digit (a code
+# like "PSCA-42"). Bare lowercase common words are NOT anchors — they overlap by
+# coincidence and would flag aligned days. This keeps the bar HIGH: the fix fires
+# only when EVERY such anchor in the objective is entirely absent from the body.
+_ANCHOR_TOKEN_RE = re.compile(r"[0-9A-Za-zÀ-ÿ]+(?:[-'][0-9A-Za-zÀ-ÿ]+)*")
+
+
+def _distinctive_anchors(objective: str) -> set[str]:
+    """The objective's proper-noun / coded anchors, lowercased for comparison.
+
+    A token qualifies when it is capitalised (a name), contains a digit (a code),
+    or is an internal-hyphen/mixed token — and is not a stopword. The first word
+    of the objective is skipped so a sentence-initial capital ("La journée…")
+    never counts as a name.
+    """
+    anchors: set[str] = set()
+    for i, tok in enumerate(_ANCHOR_TOKEN_RE.findall(objective or "")):
+        low = tok.lower()
+        if low in _STOPWORDS_FR or len(low) < 2:
+            continue
+        has_digit = any(c.isdigit() for c in tok)
+        # Capitalised past the first token (sentence-initial caps don't count),
+        # or a token bearing a digit anywhere (a reference code).
+        capitalised = i > 0 and tok[:1].isupper()
+        if capitalised or has_digit:
+            anchors.add(low)
+    return anchors
+
+
+def objective_body_divergence(
+    objective_html: str, body_html: str, language: str = "French"
+) -> list[dict]:
+    """Advisory coherence check: does the objective's anchor survive into the body?
+
+    Returns a single ``objective_body_divergence`` issue ONLY when the objective
+    is built on distinctive entity/code anchors and NONE of them appears in the
+    MY DAY body — a clear divergence (the objective describes "Solidays" while the
+    body's through-line never mentions it). Prefix-tolerant so an inflected form
+    still counts as present. Empty list (no issue) whenever the objective has no
+    distinctive anchor, or any anchor is present in the body — the HIGH bar that
+    keeps ordinary aligned briefings from flagging. Never blocks shipping; it only
+    feeds one repair attempt in the critic loop.
+    """
+    anchors = _distinctive_anchors(objective_html or "")
+    if not anchors:
+        return []  # no distinctive anchor → nothing provable, stay silent
+    # Tokenise the body with the SAME anchor regex so an internal-hyphen code
+    # ("PSCA-42") stays one token on both sides; prefix-6 tolerates inflection.
+    body_prefixes = {w.lower()[:6] for w in _ANCHOR_TOKEN_RE.findall(body_html or "")}
+    for anchor in anchors:
+        if anchor[:6] in body_prefixes:
+            return []  # at least one objective anchor lands in the body → aligned
+    return [
+        {
+            "type": "objective_body_divergence",
+            "excerpt": _excerpt(objective_html or "")
+            + f" — l'objectif s'appuie sur « {', '.join(sorted(anchors)[:3])} », "
+            "absent(s) du corps MY DAY : aligne l'objectif sur ce que le corps "
+            "développe réellement, ou inversement",
+        }
+    ]

@@ -23,13 +23,21 @@ Issue types to detect (and ONLY these):
   data exactly.
 - status_polarity_inverted: the draft asserts the OPPOSITE state of a fact —
   "fixed" becomes "still unfixed", "confirmed" becomes "to be confirmed",
-  "cancelled" becomes "planned".
+  "cancelled" becomes "planned". CANCELLATION RULE (both directions): if the
+  data says an event is "annulé"/"annulée"/"cancelled"/"reporté"/"postponed",
+  the draft must NOT present it as happening, as the day's pivot, or as
+  confirmed — and vice versa, an event the data confirms must not be reported
+  as cancelled or moved. A cancelled/postponed event stated as taking place is
+  this issue.
 - fact_misattributed: a fact, deadline or event is attached to the wrong
   subject, the wrong date or the wrong source — e.g. a mail about an X
   deadline of June 22 reported as a Y deadline of June 16.
 - unsupported_claim: the draft asserts that someone said, offered, confirmed
   or is available, or states a concrete deadline/decision, and NOTHING in the
-  data contains it.
+  data contains it. This ALSO covers invented descriptive colour — a concrete
+  detail added to make prose vivid that no source supports (a venue's "scène
+  principale", a "grand soleil", a named room, a headcount, a mood). If the
+  detail is not in the data, it is unsupported, however plausible it sounds.
 
 PRECISION RULE (mandatory): flag an issue ONLY when you can quote in
 "evidence" the exact span of the data that contradicts the draft. No

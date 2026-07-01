@@ -467,6 +467,17 @@ def test_esc_with_md_leaves_arithmetic_asterisks_alone():
     assert _esc_with_md("2 * 3 = 6") == "2 * 3 = 6"
 
 
+def test_esc_with_md_strips_trailing_orphan_italic_marker():
+    """B6 (6.2): a lone `*` the model opened for italic and never closed trails
+    the line — strip it. The strip is trailing-only, so a mid-line arithmetic
+    `*` (e.g. "2 * 3") is untouched."""
+    from estormi_briefing.compose.build_daily_note import _esc_with_md
+
+    assert _esc_with_md("Réunion importante *") == "Réunion importante"
+    # Trailing-only: an interior `*` in arithmetic still survives.
+    assert _esc_with_md("2 * 3") == "2 * 3"
+
+
 # ── build_daily_note: news_synthesis rendering ────────────────────────────────
 
 
@@ -847,6 +858,22 @@ def test_render_around_hybride_intro_plus_bullets():
     assert 'class="source"' in html
 
 
+def test_render_around_html_dedups_repeated_bullet():
+    """B4 (2.6): a weak model sometimes emits the same orbit bullet twice — the
+    seen-set (mirroring _news_bullets_to_html) renders it once."""
+    from estormi_briefing.compose.build_daily_note import _render_around_html
+
+    html = _render_around_html(
+        "- Valider le devis [src: mail · 31 mai]\n"
+        "- Valider le devis [src: mail · 31 mai]\n"
+        "- Déjeuner samedi [src: gcal · 6 juin]"
+    )
+    # Two distinct bullets, not three — the duplicate collapses.
+    assert html.count("<li>") == 2
+    assert html.count("Valider le devis") == 1
+    assert "Déjeuner samedi" in html
+
+
 def test_build_note_editorial_five_sections_fr():
     """The editorial path emits the five value-oriented sections, localised."""
     vision = (
@@ -1034,7 +1061,7 @@ def test_sane_theme_date_clamps_or_drops():
     assert _sane_theme_date("2024-06-10", "") == "2024-06-10"  # no briefing date → pass through
 
 
-def test_dont_forget_line_overdue_first_localized_and_capped():
+def test_dont_forget_line_due_today_first_localized_and_capped():
     from estormi_briefing.compose.build_daily_note import _dont_forget_line
 
     reminders = [
@@ -1043,8 +1070,9 @@ def test_dont_forget_line_overdue_first_localized_and_capped():
         {"title": "Sans titre", "when": "All day", "overdue": False},
     ]
     out = _dont_forget_line(reminders, "fr")
-    # Overdue leads, in red, with the localized badge.
-    assert out.index("Relancer le syndic") < out.index("Commander les courses")
+    # B2 (#3): due-today leads so a backlog can't evict what's due today; overdue
+    # still renders in red with the localized badge, just after.
+    assert out.index("Commander les courses") < out.index("Relancer le syndic")
     assert "⚠" in out and "en retard" in out
     # Timed reminder keeps its time; all-day one doesn't show "All day".
     assert "Commander les courses — 18:00" in out
@@ -1056,6 +1084,88 @@ def test_dont_forget_line_overdue_first_localized_and_capped():
     many = [{"title": f"t{i}", "when": "", "overdue": False} for i in range(10)]
     assert _dont_forget_line(many, "en", cap=3).count("t") >= 3
     assert "t5" not in _dont_forget_line(many, "en", cap=3)
+
+
+def test_dont_forget_line_due_today_survives_overdue_backlog():
+    """B2 (#3): a wall of overdue chores must not fill the cap and evict what's
+    actually due today. 8 overdue + 1 due-today, cap=6 → the due-today item is
+    present and overdue is trimmed."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [{"title": f"Retard {i}", "when": "", "overdue": True} for i in range(8)] + [
+        {"title": "Facture du jour", "when": "10:00", "overdue": False}
+    ]
+    out = _dont_forget_line(reminders, "fr", cap=6)
+    assert "Facture du jour" in out
+    # The cap still bites — not every overdue item can fit.
+    assert "Retard 7" not in out
+
+
+def test_dont_forget_line_resolved_evidence_demoted_not_hidden():
+    """R1: an overdue reminder a message proved DONE (resolved_evidence) is
+    DEMOTED out of the red "⚠ en retard" urgency — rendered plain but STILL
+    listed (no-soft-hide). A live overdue in the same line stays red."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [
+        {
+            "title": "Location véhicule",
+            "overdue": True,
+            "days_overdue": 5,
+            "resolved_evidence": True,
+        },
+        {"title": "Appeler le plombier", "overdue": True, "days_overdue": 2},
+    ]
+    out = _dont_forget_line(reminders, "fr")
+    # Demoted item is still present (never removed) …
+    assert "Location véhicule" in out
+    # … but NOT wrapped in the red overdue span nor badged "en retard".
+    assert 'color:#dc2626">⚠ Location véhicule' not in out
+    # The live overdue keeps its red badge — demotion is per-item, not global.
+    assert 'color:#dc2626">⚠ Appeler le plombier (en retard)' in out
+
+
+def test_dont_forget_line_no_resolved_evidence_stays_red():
+    """R1 safe direction: without resolved_evidence, an overdue reminder keeps
+    its red "⚠ en retard" badge — the demotion never fires by default."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [{"title": "Location véhicule", "overdue": True, "days_overdue": 5}]
+    out = _dont_forget_line(reminders, "fr")
+    assert 'color:#dc2626">⚠ Location véhicule (en retard)' in out
+
+
+def test_dont_forget_line_overdue_ordered_by_recency_with_age_affordance():
+    """R2: live overdue are ordered most-recently-overdue first (smallest
+    days_overdue leads) and each carries a compact "· depuis N j" age
+    affordance. No item is collapsed or dropped (no-soft-hide) — ordering +
+    affordance only."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [
+        {"title": "Vieux dossier", "overdue": True, "days_overdue": 12},
+        {"title": "Slip récent", "overdue": True, "days_overdue": 1},
+        {"title": "Milieu", "overdue": True, "days_overdue": 4},
+    ]
+    out = _dont_forget_line(reminders, "fr")
+    # Most-recently-overdue first: 1j before 4j before 12j.
+    assert out.index("Slip récent") < out.index("Milieu") < out.index("Vieux dossier")
+    # Age affordance present for each.
+    assert "depuis 1 j" in out and "depuis 4 j" in out and "depuis 12 j" in out
+    # Every item still fully shown — nothing collapsed into "+N anciens".
+    for title in ("Vieux dossier", "Slip récent", "Milieu"):
+        assert title in out
+    assert "anciens" not in out
+
+
+def test_dont_forget_line_no_age_affordance_when_days_overdue_absent():
+    """R2 safe/back-compat: a legacy overdue dict carrying no ``days_overdue``
+    key renders red with no "depuis" affordance and never crashes."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    out = _dont_forget_line([{"title": "Ancien truc", "overdue": True}], "fr")
+    assert 'color:#dc2626">⚠ Ancien truc (en retard)' in out
+    assert "depuis" not in out
 
 
 def test_build_note_places_timeline_and_reminders_inside_my_day():

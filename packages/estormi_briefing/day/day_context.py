@@ -10,6 +10,7 @@ as actionable vs. context-only.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 
 import aiosqlite
@@ -48,6 +49,11 @@ _CORR_MAX_EVENTS = int(os.getenv("BRIEFING_CORRELATION_MAX_EVENTS", "12"))
 # busy day can't crowd out everything else.
 _WA_RECENT_HOURS = float(os.getenv("BRIEFING_WHATSAPP_RECENT_HOURS", "48"))
 _WA_RECENT_MAX_CHUNKS = int(os.getenv("BRIEFING_WHATSAPP_RECENT_MAX_CHUNKS", "30"))
+
+# Look-back window (days) the completion-evidence reconciliation (R1) scans for a
+# "this is done" cue proving an overdue reminder finished. Wide enough to catch
+# a confirmation from a few days ago, capped by the fetch limit below.
+_COMPLETION_WINDOW_DAYS = int(os.getenv("BRIEFING_COMPLETION_WINDOW_DAYS", "5"))
 
 # Health (WHOOP) is fetched on its own track so a busy window of mail/chats can't
 # crowd the readiness read out of the capped day-context bundle. Keep the most
@@ -95,6 +101,61 @@ _DAY_WHATSAPP_GROUP_TYPES = {
 _CONTEXT_WHATSAPP_GROUP_TYPES = _DAY_WHATSAPP_GROUP_TYPES | {"group", "sport"}
 
 
+# ── Completion-evidence reconciliation (R1) ──────────────────────────────────
+# An overdue reminder ("Location véhicule…") sometimes stays "⚠ en retard" for
+# days after a mail/message already proves it done ("Location terminée"). Below,
+# _fetch_daily_actions scans the same recent personal window (mail/imessage/
+# whatsapp) for a STRONG completion cue co-occurring with one of the reminder's
+# DISTINCTIVE title tokens; a match sets ``resolved_evidence=True`` on the action.
+# build_daily_note then DEMOTES that reminder out of the red urgency — it is
+# still LISTED, never hidden (no-soft-hide). The distinctive-token gate keeps a
+# generic "fait"/"payé" in unrelated chatter from ever demoting a live errand.
+
+# Mirror of day_vision's correlation tokenizer (kept local: day_context cannot
+# import from day_vision — day_vision imports from here). Same regex + generic
+# stop-set so "distinctive" means the same thing on both correlation paths.
+_TOKEN_RE = re.compile(r"[a-zà-ÿ0-9]{4,}", re.IGNORECASE)
+_GENERIC_TOKENS = frozenset(
+    """
+    avec pour chez dans sous vers avant après apres appeler valider acheter
+    achat course courses running footing réunion reunion rendez vous point
+    daily week weekend cette leur sans plus prévoir prevoir penser faire
+    préparer preparer demain matin soir midi aujourd lundi mardi mercredi
+    jeudi vendredi samedi dimanche janvier février fevrier mars avril juin
+    juillet août aout septembre octobre novembre décembre decembre
+    saint sainte stock stocks gare gares lien liens appel appels paris
+    """.split()
+)
+
+
+def _distinctive_title_tokens(text: str) -> set[str]:
+    """The reminder title's rare vocabulary — the words a real match shares.
+
+    Mirrors ``day_vision._distinctive_tokens``: drop generic words and bare
+    years, keep tokens ≥5 chars or carrying a digit."""
+    out: set[str] = set()
+    for w in _TOKEN_RE.findall((text or "").lower()):
+        if w in _GENERIC_TOKENS or (w.isdigit() and w.startswith("20") and len(w) == 4):
+            continue
+        if len(w) >= 5 or any(ch.isdigit() for ch in w):
+            out.add(w)
+    return out
+
+
+# A STRONG "this is done" cue in a mail/message. Word-bounded so "fait" doesn't
+# fire on "faites"/"parfait", and deliberately narrow — only cues that assert
+# completion, never mere intent ("je vais payer"). Covers the common French
+# forms plus the participle variants (payé/payée/payés/payées …).
+_COMPLETION_CUE_RE = re.compile(
+    r"\b("
+    r"termin[ée]e?s?|effectu[ée]e?s?|pay[ée]e?s?|re[çc]ue?s?|livr[ée]e?s?|"
+    r"r[ée]cup[ée]r[ée]e?s?|fait|faite|faits|faites|r[ée]gl[ée]e?s?|"
+    r"cl[ôo]tur[ée]e?s?|confirm[ée]e?s?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
 def _wa_effective_type(chunk: dict) -> str:
     """The classification value the _DAY/_CONTEXT_WHATSAPP sets are written against.
 
@@ -108,6 +169,56 @@ def _wa_effective_type(chunk: dict) -> str:
     if gt == "unknown":
         return chunk.get("chat_kind") or "unknown"
     return gt
+
+
+async def _annotate_completion_evidence(day: date, reminders: list[dict]) -> None:
+    """Mark overdue reminders that a recent message proves DONE (R1).
+
+    For each *overdue* reminder, scan the recent personal window (mail /
+    imessage / whatsapp) for a STRONG completion cue (``_COMPLETION_CUE_RE``)
+    co-occurring with one of the reminder's DISTINCTIVE title tokens; on a match
+    set ``resolved_evidence=True`` on the action dict. build_daily_note then
+    renders it plain instead of red "⚠ en retard" — still LISTED, never hidden.
+
+    Conservative by construction: the distinctive-token gate + tight cue set mean
+    a live errand is never demoted on a generic word. Mutates ``reminders`` in
+    place; a fetch failure (``[]``) simply leaves everything unchanged (never
+    worse than today). No-op when nothing is overdue, so the common path skips
+    the extra MCP round-trip entirely."""
+    overdue = [
+        r for r in reminders if r.get("overdue") and _distinctive_title_tokens(r.get("title") or "")
+    ]
+    if not overdue:
+        return
+    chunks = await _fetch_around_mcp(
+        {
+            "date": day.isoformat(),
+            "window_days": _COMPLETION_WINDOW_DAYS,
+            # Completion evidence is a look-back only — a future-dated message
+            # can't retroactively close an errand.
+            "forward_days": 0,
+            "corpus": "personal",
+            "sources": ["mail", "imessage", "whatsapp"],
+            "limit": 200,
+        },
+        timeout=12.0,
+    )
+    if not chunks:
+        return
+    # Precompute the completion-bearing chunks' prefix-6 vocabulary once. Prefix-6
+    # tolerates inflection/near-spelling exactly like day_vision._lexical_link.
+    cue_bearing: list[set[str]] = []
+    for chunk in chunks:
+        text = f"{chunk.get('title') or ''} {chunk.get('text') or ''}"
+        if _COMPLETION_CUE_RE.search(text):
+            cue_bearing.append({w[:6] for w in _TOKEN_RE.findall(text.lower())})
+    if not cue_bearing:
+        return
+    for reminder in overdue:
+        tokens = _distinctive_title_tokens(reminder.get("title") or "")
+        prefixes = {t[:6] for t in tokens}
+        if any(prefixes & words for words in cue_bearing):
+            reminder["resolved_evidence"] = True
 
 
 async def _fetch_daily_actions(db: aiosqlite.Connection, day: date) -> dict:
@@ -172,6 +283,9 @@ async def _fetch_daily_actions(db: aiosqlite.Connection, day: date) -> dict:
     rem_rows = [_format_action(r, after_utc=after) for r in await cur.fetchall()]
     await cur.close()
     cal_rows, rem_rows = _dedupe_calendar_reminders(cal_rows, rem_rows)
+
+    # Demote (never hide) overdue reminders a recent message proves already done.
+    await _annotate_completion_evidence(day, rem_rows)
 
     return {
         "calendar": cal_rows,
@@ -313,6 +427,26 @@ async def _fetch_health_chunks(day: date) -> list[dict]:
         },
         timeout=12.0,
     )
+    # Drop cycles whose recovery belongs to a LATER wake-day than the briefing
+    # day. A WHOOP ``date_ts`` is the cycle START (sleep onset): the cycle whose
+    # recovery you wake up with on day D starts anywhere from D-1 evening to D's
+    # small hours, while the NEXT day's cycle starts D evening. A local-NOON
+    # cutoff cleanly separates the two — it keeps the "night just passed" cycle
+    # even when sleep began after midnight (a date_ts in the early hours of D),
+    # yet still excludes a next-day cycle (started D evening) that would
+    # otherwise become ``health[0]`` on a past-day rebuild or a post-midnight
+    # run. A plain midnight cutoff wrongly dropped the after-midnight-sleep cycle
+    # and grounded readiness on yesterday's recovery. Compare real instants, not
+    # raw ISO text.
+    after, _ = _utc_bounds_for_local_day(day)
+    after_dt = _parse_iso_datetime(after)
+    if after_dt is not None:
+        cutoff = after_dt + timedelta(hours=12)  # local noon of the briefing day
+        chunks = [
+            c
+            for c in chunks
+            if (_parse_iso_datetime(c.get("date_ts") or c.get("date")) or cutoff) < cutoff
+        ]
     # Sort by real instant, not raw ISO text: WHOOP is all-UTC today so a string
     # sort happens to agree, but a non-UTC offset (matching the fetch_around fix)
     # would mis-order under lexical compare. Mirror _fetch_recent_whatsapp.

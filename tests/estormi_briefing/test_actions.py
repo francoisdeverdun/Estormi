@@ -600,3 +600,197 @@ async def test_recent_whatsapp_backfill_anchors_cutoff_on_briefing_day():
         out = await day_context._fetch_recent_whatsapp(date(2026, 6, 5), hours=48)
 
     assert [c["text"] for c in out] == ["in-window"]
+
+
+async def test_health_chunks_excludes_next_day_labelled_cycle():
+    """B1 (#2): a WHOOP ``date_ts`` is the cycle START — the evening BEFORE the
+    labelled day. On a past-day rebuild the fetch window also returns the
+    NEXT-day-labelled cycle (stamped ~22:xx of the briefing day itself); it must
+    NOT become ``health[0]``. The labelled-briefing-day cycle (stamped the prior
+    evening) leads, and the older trend cycle still rides in.
+
+    Briefing day D = 2026-06-05 (Paris). Cycles labelled D-1/D/D+1 start on the
+    evenings D-2/D-1/D respectively."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Labelled D+1 (2026-06-06): starts the evening of D → 2026-06-05T20:00Z.
+            # >= local NOON of day D (2026-06-05T10:00Z) → must be dropped.
+            {"source": "whoop", "text": "cycle-Dplus1", "date_ts": "2026-06-05T20:00:00+00:00"},
+            # Labelled D (2026-06-05): starts the evening of D-1 → 2026-06-04T20:00Z.
+            # < day-start → kept, newest survivor → health[0].
+            {"source": "whoop", "text": "cycle-D", "date_ts": "2026-06-04T20:00:00+00:00"},
+            # Labelled D-1 (2026-06-04): starts the evening of D-2 → 2026-06-03T20:00Z.
+            # Older trend row — must still ride in.
+            {"source": "whoop", "text": "cycle-Dminus1", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    texts = [c["text"] for c in out]
+    assert "cycle-Dplus1" not in texts
+    assert texts[0] == "cycle-D"
+    assert "cycle-Dminus1" in texts  # trend preserved
+
+
+async def test_health_chunks_keeps_live_same_day_cycle():
+    """B1 (#2): the live same-day case is unchanged. Today's real WHOOP cycle is
+    stamped the prior evening (< today's local midnight), so it survives the
+    day-start filter and leads."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Today's cycle (labelled 2026-06-05) — starts the evening before.
+            {"source": "whoop", "text": "today", "date_ts": "2026-06-04T20:00:00+00:00"},
+            {"source": "whoop", "text": "yesterday", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    assert [c["text"] for c in out] == ["today", "yesterday"]
+
+
+async def test_health_chunks_keeps_after_midnight_today_cycle():
+    """B1 (#2) regression: when the user falls asleep AFTER midnight, today's
+    WHOOP cycle is stamped in the small hours of the briefing day itself, not the
+    prior evening. A plain midnight cutoff wrongly dropped it and grounded
+    readiness on yesterday's recovery; the local-NOON cutoff keeps it (it is
+    still the night just passed) while excluding a genuine next-day cycle.
+
+    Briefing day D = 2026-06-05 (Paris, UTC+2): local midnight = 2026-06-04T22:00Z,
+    local noon = 2026-06-05T10:00Z."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Next-day cycle (labelled D+1) starts D evening → dropped (>= noon).
+            {"source": "whoop", "text": "tonight", "date_ts": "2026-06-05T20:00:00+00:00"},
+            # Today's cycle — sleep onset AFTER midnight → 2026-06-05T01:16 Paris
+            # (2026-06-04T23:16Z). Past local midnight, but the night just passed:
+            # must survive and lead.
+            {
+                "source": "whoop",
+                "text": "today-after-midnight",
+                "date_ts": "2026-06-04T23:16:00+00:00",
+            },
+            {"source": "whoop", "text": "yesterday", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    texts = [c["text"] for c in out]
+    assert texts[0] == "today-after-midnight"  # kept + leads (was dropped under midnight cutoff)
+    assert "tonight" not in texts  # genuine next-day cycle still excluded
+
+
+# ── day: _days_overdue helper (R2) ───────────────────────────────────────────
+
+
+def test_days_overdue_counts_whole_days_and_floors_at_zero():
+    """R2: whole days between the due instant and the briefing day-start; a
+    not-yet-overdue or unparseable due date floors at 0 (so the caller can gate
+    the affordance on ``> 0``)."""
+    # Due 2026-04-28 22:00Z, day-start 2026-05-02 22:00Z → 4 whole days.
+    assert day._days_overdue("2026-04-28T22:00:00+00:00", "2026-05-02T22:00:00+00:00") == 4
+    # Not overdue (due after day-start) → 0, not negative.
+    assert day._days_overdue("2026-05-10T22:00:00+00:00", "2026-05-02T22:00:00+00:00") == 0
+    # Offset spelling is irrelevant — instants compared, not raw ISO text.
+    assert day._days_overdue("2026-04-30T00:00:00Z", "2026-05-02T22:00:00+00:00") == 2
+    # Unparseable → 0.
+    assert day._days_overdue("not-a-date", "2026-05-02T22:00:00+00:00") == 0
+
+
+async def test_fetch_daily_actions_stamps_days_overdue(actions_db):
+    """R2: an overdue reminder carries a ``days_overdue`` count on its action."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Tâche en retard", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    # No completion evidence in the recent window.
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(return_value=[])):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True
+    # Due 2026-04-28 22:00Z; May-3 Paris day-start = 2026-05-02 22:00Z → 4 days.
+    assert r["days_overdue"] == 4
+
+
+# ── day_context: completion-evidence reconciliation (R1) ─────────────────────
+
+
+async def test_completion_evidence_demotes_overdue_reminder(actions_db):
+    """R1 fires: a recent mail proving an overdue reminder DONE (a strong cue +
+    a distinctive title token) sets ``resolved_evidence=True`` on the action."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # Strong completion cue ("terminée") co-occurring with a distinctive
+        # title token ("cogefrem").
+        return [
+            {"source": "mail", "title": "Retour", "text": "La location Cogefrem est terminée."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True  # still overdue by date …
+    assert r.get("resolved_evidence") is True  # … but flagged done — demoted, not hidden
+
+
+async def test_completion_evidence_does_not_demote_unrelated_mail(actions_db):
+    """R1 safe direction: a completion cue in UNRELATED chatter (no distinctive
+    title-token overlap) must NOT demote a live errand."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # "terminée" is present but talks about something else entirely — no
+        # shared distinctive token, so the errand must stay live.
+        return [
+            {"source": "mail", "title": "Facture", "text": "La réunion budget est terminée."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True
+    assert r.get("resolved_evidence") is not True
+
+
+async def test_completion_evidence_needs_strong_cue_not_mere_mention(actions_db):
+    """R1 safe direction: a message that names the errand but carries NO strong
+    completion cue (mere intent / mention) must NOT demote it."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # Names "Cogefrem" but only expresses intent — no completion cue.
+        return [
+            {"source": "mail", "title": "À faire", "text": "Il faut relancer Cogefrem demain."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    assert result["reminders"][0].get("resolved_evidence") is not True

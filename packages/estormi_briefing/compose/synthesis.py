@@ -97,8 +97,48 @@ def _maybe_truncate(text: str, provider: str) -> str:
 
 
 # An inline "→ Impact: …" clause inside a news bullet — everything up to the
-# code-attached [SOURCE: …] marker (or end of line).
+# code-attached [SOURCE: …] marker (or end of line). ``[^\[\n]*`` is greedy, so
+# a bullet the model doubled ("… → Impact: X. → Impact: X. [SOURCE …]") matches
+# as ONE blob; :func:`_dedup_impact_clauses` splits and collapses it first.
 _IMPACT_CLAUSE_RE = re.compile(r"\s*→\s*Impact\s*:?[^\[\n]*")
+# The whole impact region of a bullet (one or more consecutive "→ Impact:"
+# clauses) and the split point between individual clauses within it.
+_IMPACT_REGION_RE = re.compile(r"→\s*Impact\s*:?[^\[\n]*")
+_IMPACT_SPLIT_RE = re.compile(r"→\s*Impact\s*:?\s*")
+
+
+def _dedup_impact_clauses(text: str) -> str:
+    """Collapse a bullet's repeated ``→ Impact:`` clauses down to the first.
+
+    A weak model sometimes appends the same consequence twice
+    ("… → Impact: ton épargne. → Impact: ton épargne."). ``_IMPACT_CLAUSE_RE``
+    swallows both as one greedy blob (no ``[`` between them), so the later
+    strippers never split them — the doubling ships verbatim. Here we split the
+    impact region into individual clauses, keep the first plus any that add
+    genuinely new wording (``normalised_key`` dedup), and re-emit a single
+    ``→ Impact:`` prefix. Deterministic; a bullet with one impact is untouched."""
+    out: list[str] = []
+    for line in text.splitlines():
+        region = _IMPACT_REGION_RE.search(line)
+        if not region:
+            out.append(line)
+            continue
+        clauses = [c.strip() for c in _IMPACT_SPLIT_RE.split(region.group(0)) if c.strip()]
+        if len(clauses) <= 1:
+            out.append(line)
+            continue
+        kept: list[str] = []
+        seen: set[str] = set()
+        for clause in clauses:
+            key = normalised_key(clause)
+            if key and key in seen:
+                continue
+            seen.add(key)
+            kept.append(clause)
+        merged = " → Impact: " + " ".join(kept)
+        line = (line[: region.start()].rstrip() + merged + line[region.end() :]).rstrip()
+        out.append(line)
+    return "\n".join(out)
 
 
 def _cap_impact_lines(text: str, cap: int) -> str:
@@ -138,6 +178,48 @@ def _strip_ungrounded_impacts(text: str) -> str:
         if m and not (tokens and impact_grounded(m.group(0), tokens)):
             line = re.sub(r"\s{2,}", " ", _IMPACT_CLAUSE_RE.sub(" ", line)).rstrip()
         out.append(line)
+    return "\n".join(out)
+
+
+# The resolved-citation date a bullet carries after :func:`resolve_news_citations`:
+# a trailing "[SOURCE: … | YYYY-MM-DD]" marker. The date is the newest source's.
+_SOURCE_DATE_RE = re.compile(r"\[SOURCE:[^\]]*\|\s*(\d{4}-\d{2}-\d{2})\s*\]\s*$")
+# Relative-time deictics that only make sense on the day the event happened. A
+# bullet resolved to an EARLIER date has these re-anchored to the absolute day
+# so a D-1 item ("… ce soir") isn't read as tonight when shown the day after.
+# Word-bounded, French only; the value is the absolute-day replacement.
+_RELATIVE_TIME_SUBS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bce soir\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\bcet après-midi\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\bce matin\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\bcette nuit\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\baujourd'hui\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\bdemain\b", re.IGNORECASE), "le {day}"),
+    (re.compile(r"\bhier\b", re.IGNORECASE), "le {day}"),
+)
+
+
+def _reanchor_relative_time(text: str, briefing_day: str) -> str:
+    """Neutralise relative-time words in bullets resolved to an EARLIER day.
+
+    A world bullet is written in the source's present ("Match France-Irak ce
+    soir (23h)"). Shown the day AFTER, "ce soir" now reads as tonight — a
+    factual drift. Deterministic re-anchoring: when a bullet's RESOLVED citation
+    date (the ``[SOURCE: … | date]`` marker) is strictly before ``briefing_day``,
+    replace each relative-time deictic with the absolute source day ("le
+    2026-06-30"). A SAME-DAY (or future) bullet keeps "ce soir" untouched — the
+    deixis is still correct. Non-bullet lines and bullets with no resolvable
+    date pass through unchanged (never worse than current)."""
+    out: list[str] = []
+    for line in text.splitlines():
+        m = _SOURCE_DATE_RE.search(line)
+        if not m or m.group(1) >= briefing_day:
+            out.append(line)
+            continue
+        body = line[: m.start()]
+        for pattern, repl in _RELATIVE_TIME_SUBS:
+            body = pattern.sub(repl.format(day=m.group(1)), body)
+        out.append(body + line[m.start() :])
     return "\n".join(out)
 
 
@@ -465,16 +547,22 @@ async def _synthesize_news(
         log.info("news synthesis: citation-resolve empty → deterministic fallback")
     else:
         log.info("news synthesis: %d bullet(s) kept after citation resolve", kept)
+    # Re-anchor stale relative-time deictics ("ce soir") on any bullet resolved
+    # to an EARLIER day than the briefing — a D-1 item must not read as tonight.
+    # Runs on both the resolved and the fallback path (both carry the marker).
+    resolved = _reanchor_relative_time(resolved, date_str)
     # Coverage floor/ceiling first (real input bullets only), then the
     # correlation layer: follow-ups marked deterministically from the topic
     # snapshot, then the impact leash — a local 14B ignores the prompt's
-    # impact budget and force-links every item to the profile — cap the
-    # clauses, drop any whose words can't be traced back to the user's own
-    # profile, and finally top back up to the impact floor with one targeted
-    # (still grounding-gated) repair call when the model under-delivered.
+    # impact budget and force-links every item to the profile — collapse a
+    # doubled impact clause, cap the clauses, drop any whose words can't be
+    # traced back to the user's own profile, and finally top back up to the
+    # impact floor with one targeted (still grounding-gated) repair call when
+    # the model under-delivered.
     impact_cap = 2 if provider == "local" else 3
     resolved = _enforce_news_bounds(resolved, news_items, date_str)
     resolved = mark_followups(resolved, last_topics)
+    resolved = _dedup_impact_clauses(resolved)
     resolved = _cap_impact_lines(resolved, cap=impact_cap)
     resolved = _strip_ungrounded_impacts(resolved)
     return await _ensure_impact_floor(resolved, provider, model, cap=impact_cap)

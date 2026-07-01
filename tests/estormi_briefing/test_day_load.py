@@ -320,6 +320,44 @@ def test_facts_omit_what_was_not_parsed():
     assert advice["facts"] == ["récupération 70% (vert)"]
 
 
+def test_facts_free_day_slot_becomes_no_constraint_fact():
+    """A best slot spanning the whole working window (08:00–21:00) is an open
+    day: the fact must not name an 08:00–21:00 créneau — those bounds would read
+    as a real constraint and leak into the composer's citable figures. It says
+    "journée libre" and steers the workout to "quand tu veux" instead."""
+    advice = choose_advice(
+        _snapshot(),
+        _features(best_slot={"start": "08:00", "end": "21:00", "minutes": 780}),
+        [WORKOUT_NOTE],
+        [],
+        "",
+        "fr",
+    )
+    facts = advice["facts"]
+    free_day = [f for f in facts if f.startswith("journée libre")]
+    assert free_day == [
+        "journée libre, aucune contrainte d'horaire — place ta séance quand tu veux"
+    ]
+    # No créneau fact, and none of the window bounds surface as citable figures.
+    assert not any(f.startswith("créneau libre") for f in facts)
+    assert not any("08:00" in f or "21:00" in f or "780" in f for f in facts)
+
+
+def test_facts_normal_slot_still_names_the_creneau():
+    """A slot short of the whole-day threshold keeps naming its bounds — only a
+    genuinely open day is suppressed."""
+    advice = choose_advice(
+        _snapshot(),
+        _features(best_slot={"start": "12:00", "end": "20:00", "minutes": 480}),
+        [WORKOUT_NOTE],
+        [],
+        "",
+        "fr",
+    )
+    assert "créneau libre 12:00–20:00 (480 min)" in advice["facts"]
+    assert not any(f.startswith("journée libre") for f in advice["facts"])
+
+
 def test_facts_english_for_any_other_lang():
     events, slots = _day_inputs()
     advice = choose_advice(
