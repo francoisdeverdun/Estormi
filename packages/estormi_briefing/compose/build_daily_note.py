@@ -166,7 +166,11 @@ def _esc_with_md(text: str) -> str:
     """
     out = _BOLD_RE.sub(r"<b>\1</b>", _esc(text))
     out = out.replace("**", "")
-    return _ITALIC_RE.sub(r"<i>\1</i>", out)
+    out = _ITALIC_RE.sub(r"<i>\1</i>", out)
+    # A lone ``*`` the model opened for italic and never closed survives the
+    # pairing sub above. Strip it only when it trails the line (with optional
+    # whitespace) — a flanked strip would eat the multiplication in "2 * 3".
+    return re.sub(r"\s*\*\s*$", "", out)
 
 
 # Leaked schema scaffolding: weak local models sometimes echo the JSON "kind"
@@ -360,6 +364,7 @@ def _render_around_html(text: str) -> str:
     """
     intro_lines: list[str] = []
     bullets: list[str] = []
+    seen: set[str] = set()
     for raw in (text or "").splitlines():
         line = raw.strip()
         if not line:
@@ -372,6 +377,14 @@ def _render_around_html(text: str) -> str:
             # of 2026-06-21/-22), so skip bullets sourced from the world corpus.
             if _AROUND_WORLD_SRC_RE.search(bullet):
                 continue
+            # Drop near-duplicate orbit bullets (a weak model sometimes repeats
+            # one, or the same chunk arrives under two prefixes). Mirror
+            # _news_bullets_to_html so both lists dedup the same way.
+            key = _norm_for_dedup(bullet)
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
             bullets.append(bullet)
         else:
             intro_lines.append(line)
@@ -899,14 +912,17 @@ def _news_bullets_to_html(text: str, lang: str = "en") -> list[str]:
 
 
 def _dont_forget_line(reminders: list[dict], lang: str = "en", cap: int = 6) -> str:
-    """Code-rendered reminders line under "My day" — overdue first, then due
-    today. The prose no longer guarantees reminder coverage (it carries
+    """Code-rendered reminders line under "My day" — due-today first, then
+    overdue. The prose no longer guarantees reminder coverage (it carries
     insights, not lists), so this deterministic line does; zero LLM words,
-    zero hallucination surface."""
+    zero hallucination surface.
+
+    Due-today leads so a backlog of overdue chores can't fill the cap and evict
+    what's actually due today — the one thing this line must never drop."""
     overdue = [r for r in reminders if r.get("overdue")]
     today = [r for r in reminders if not r.get("overdue")]
     parts: list[str] = []
-    for r in overdue + today:
+    for r in today + overdue:
         title = str(r.get("title") or "").strip()
         if not title:
             continue
@@ -932,7 +948,12 @@ def _dont_forget_line(reminders: list[dict], lang: str = "en", cap: int = 6) -> 
 
 
 def _brief_intro(date_str: str, actions: dict, lang: str = "en") -> str:
-    overdue_count = sum(1 for r in actions.get("reminders", []) if r.get("overdue"))
+    # Expired timed reminders are stale, not live: exclude them from the count
+    # so the intro can't announce "5 en retard" for chores that already aged out
+    # (mirrors the list build_note renders — see the ``expired`` flag).
+    overdue_count = sum(
+        1 for r in actions.get("reminders", []) if r.get("overdue") and not r.get("expired")
+    )
     calendar_count = len(actions.get("calendar", []) or [])
 
     parts = []
@@ -1005,7 +1026,10 @@ def build_note(
 
     title_html = f'<h1 class="briefing-title">{_esc(briefing_title(date_str, lang))}</h1>'
     calendar = actions.get("calendar") or []
-    reminders = actions.get("reminders") or []
+    # Drop expired timed reminders (a slot that passed >24h before day-start):
+    # they're stale, not live errands, and only pad the overdue list. Date-only
+    # chores never carry the flag, so they keep rolling forward (_is_expired).
+    reminders = [r for r in (actions.get("reminders") or []) if not r.get("expired")]
     has_actions = bool(calendar or reminders)
 
     # Lift the READINESS:/OBJECTIVE: steers and split off the AROUND: periphery —

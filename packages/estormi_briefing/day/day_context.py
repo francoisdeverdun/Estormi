@@ -313,6 +313,21 @@ async def _fetch_health_chunks(day: date) -> list[dict]:
         },
         timeout=12.0,
     )
+    # Drop cycles that START on or after the briefing day's local midnight. A
+    # WHOOP ``date_ts`` is the cycle START — the evening BEFORE the labelled day
+    # — so the cycle *labelled* the briefing day is stamped the prior evening and
+    # rides through, while a NEXT-day-labelled cycle (stamped ~22:xx of the
+    # briefing day itself) is in the future for this briefing and must not become
+    # ``health[0]`` on a past-day rebuild or a post-midnight run. Compare real
+    # instants against the tz-aware day-start, not raw ISO text.
+    after, _ = _utc_bounds_for_local_day(day)
+    after_dt = _parse_iso_datetime(after)
+    if after_dt is not None:
+        chunks = [
+            c
+            for c in chunks
+            if (_parse_iso_datetime(c.get("date_ts") or c.get("date")) or after_dt) < after_dt
+        ]
     # Sort by real instant, not raw ISO text: WHOOP is all-UTC today so a string
     # sort happens to agree, but a non-UTC offset (matching the fetch_around fix)
     # would mis-order under lexical compare. Mirror _fetch_recent_whatsapp.

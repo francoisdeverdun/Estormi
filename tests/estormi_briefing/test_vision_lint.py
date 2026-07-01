@@ -277,3 +277,107 @@ def test_melodrama_flagged_in_french_run():
 def test_melodrama_not_flagged_in_clean_briefing():
     types = {i["type"] for i in lint_vision(_GOOD_FR, language="French")}
     assert "melodrama" not in types
+
+
+# ── D1: plural-imperative vouvoiement (curated list, not blanket \w+ez) ────────
+
+
+def test_imperative_vous_flagged_as_formal_address():
+    """A vous-form imperative ("Réservez…") carries no pronoun but still vouvoie."""
+    text = _GOOD_FR.replace(
+        "Prépare ce que tu veux faire remonter",
+        "Réservez l'énergie pour la revue et planifiez la relance",
+    )
+    types = {i["type"] for i in lint_vision(text, language="French")}
+    assert "formal_address" in types
+
+
+def test_curated_imperative_list_does_not_eat_innocent_words():
+    """The list is explicit — assez/chez/nez must not trip a \\w+ez false-positive."""
+    from estormi_briefing.lint.vision_lint import _FRENCH_IMPERATIVE_VOUS_RE
+
+    for innocent in ("assez tôt", "chez toi", "le nez au vent", "un rez-de-chaussée"):
+        assert not _FRENCH_IMPERATIVE_VOUS_RE.search(innocent), innocent
+    for imperative in ("Réservez l'énergie", "Planifiez la revue", "Vérifiez le budget"):
+        assert _FRENCH_IMPERATIVE_VOUS_RE.search(imperative), imperative
+
+
+# ── D2: personification melodrama, widened + fed to lede_issues ───────────────
+
+
+def test_personification_melodrama_flagged_in_my_day():
+    text = _GOOD_FR.replace(
+        "les conclusions\nde l'une nourrissent l'autre",
+        "la journée scelle la boucle et la revue tranche la trajectoire",
+    )
+    types = {i["type"] for i in lint_vision(text, language="French")}
+    assert "melodrama" in types
+
+
+def test_literal_sceller_un_accord_not_flagged():
+    """ "sceller un accord/pacte" is plain language, not the personification tic."""
+    from estormi_briefing.lint.vision_lint import _MELODRAMA_VERB_RE
+
+    assert not _MELODRAMA_VERB_RE.search("sceller un accord avec le partenaire")
+    assert not _MELODRAMA_VERB_RE.search("sceller le pacte de confiance")
+    assert _MELODRAMA_VERB_RE.search("la journée scelle la boucle")
+
+
+def test_lede_issues_flags_personification():
+    from estormi_briefing.lint.vision_lint import lede_issues
+
+    assert any("melodramatic" in i for i in lede_issues("La journée scelle la boucle avec Diego."))
+    # A named pivot stated soberly (and "sceller un accord" as a real action) passes.
+    assert lede_issues("Réunion avec Diego pour sceller un accord commercial à 14h.") == []
+
+
+# ── D3: [src: …] marker buried mid-sentence in MY DAY ─────────────────────────
+
+
+def test_src_marker_mid_sentence_flagged():
+    text = _GOOD_FR.replace(
+        "puis la seconde session de la revue avec le partenaire de 15h à 17h",
+        "puis la revue [src: agenda · 12 juin] avec le partenaire de 15h à 17h",
+    )
+    types = {i["type"] for i in lint_vision(text, language="French")}
+    assert "src_marker_mid_sentence" in types
+
+
+def test_src_marker_at_line_end_not_flagged():
+    """AROUND bullets legitimately CLOSE on their [src: …] — never mid-sentence."""
+    types = {i["type"] for i in lint_vision(_GOOD_FR, language="French")}
+    assert "src_marker_mid_sentence" not in types
+
+
+# ── D6: MY DAY self-repetition (repeated content bigrams) ─────────────────────
+
+
+def test_my_day_self_repetition_flagged():
+    text = _GOOD_FR.replace(
+        "La colonne vertébrale du jour, c'est la plateforme data. Deux heures d'ADR dès 10h,\n"
+        "puis la seconde session de la revue avec le partenaire de 15h à 17h : les conclusions\n"
+        "de l'une nourrissent l'autre, et tout débouche sur le point leadership à 17h.",
+        "La revue partenaire prépare le point leadership. La revue partenaire nourrit le "
+        "point leadership. La revue partenaire ouvre le point leadership du soir sans faute.",
+    )
+    types = {i["type"] for i in lint_vision(text, language="French")}
+    assert "my_day_self_repetition" in types
+
+
+def test_ordinary_prose_not_flagged_as_self_repetition():
+    types = {i["type"] for i in lint_vision(_GOOD_FR, language="French")}
+    assert "my_day_self_repetition" not in types
+
+
+def test_repeated_content_bigrams_ignores_stopwords():
+    from estormi_briefing.lint.vision_lint import repeated_content_bigrams
+
+    # "de la" / "et le" recur but are pure stopwords → no content repetition.
+    assert repeated_content_bigrams("il part de la gare et le train arrive de la ville") == 0
+    # Three distinct content bigrams repeated verbatim.
+    assert (
+        repeated_content_bigrams(
+            "revue partenaire point leadership, revue partenaire point leadership encore"
+        )
+        >= 3
+    )

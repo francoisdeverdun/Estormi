@@ -783,3 +783,59 @@ async def test_repair_loop_passes_composer_flag(actions_db):
             actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
         )
     assert captured.get("use_composer") is False
+
+
+async def test_repair_loop_surfaces_critic_unavailable_advisory(actions_db):
+    """E6: when a critic reports an error (outage / unparseable reply), the loop
+    surfaces a non-blocking `critic_unavailable` advisory so the run doesn't
+    report an unchecked briefing as silently approved."""
+    import structlog
+
+    from estormi_briefing.run_briefing import _run_critic_repair
+
+    clean = (
+        "OBJECTIVE: la journée.\n\n"
+        "Un paragraphe correct qui décrit la journée avec assez de mots pour "
+        "passer le seuil de densité du lint, en reliant les faits du jour entre "
+        "eux comme il se doit, sans bullet ni rubrique, sur plusieurs phrases "
+        "complètes qui disent ce que la journée signifie et ce qui est en jeu.\n\n"
+        "AROUND: rien aujourd'hui."
+    )
+
+    async def fake_vision(today, actions, provider, model, **kw):
+        return clean, {"calendar": []}
+
+    async def fake_critique(*a, **kw):
+        # The critic ran but couldn't be parsed — E6's silent-outage path.
+        return {"issues": [], "approved": True, "critic_error": "unparseable"}
+
+    async def fake_fact_critique(*a, **kw):
+        return {"issues": [], "approved": True}
+
+    # The surgical readiness/voice passes call the LLM; keep them inert no-ops.
+    async def fake_llm(*a, **kw):
+        return ""
+
+    with (
+        patch("estormi_briefing.run_briefing._generate_day_vision", side_effect=fake_vision),
+        patch("estormi_briefing.run_briefing.critique_briefing", side_effect=fake_critique),
+        patch(
+            "estormi_briefing.run_briefing.fact_critique_briefing",
+            side_effect=fake_fact_critique,
+        ),
+        patch("estormi_briefing.llm.runtime._llm_call", side_effect=fake_llm),
+        patch("estormi_briefing.llm.runtime._run_metrics", None),
+    ):
+        import estormi_briefing.llm.runtime as runtime
+
+        runtime.refresh("fr", "")
+        with structlog.testing.capture_logs() as logs:
+            out, _ = await _run_critic_repair(
+                actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
+            )
+
+    assert out == clean  # never blocked — the briefing still ships
+    events = " ".join(str(entry.get("event", "")) for entry in logs)
+    assert "critic unavailable" in events  # advisory was surfaced
+    # And it rode into the persisted critique's issues (logged as unresolved).
+    assert any("critic_unavailable" in str(entry) for entry in logs)

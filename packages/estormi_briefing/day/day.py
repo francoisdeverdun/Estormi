@@ -128,7 +128,37 @@ def _format_action(row: aiosqlite.Row, after_utc: str = "") -> dict:
         # site) and avoid suggesting a commute on a remote day.
         "working_location": working_location,
         "overdue": _is_overdue(date_ts_str, after_utc),
+        # A *timed* reminder whose slot passed more than a day before this
+        # briefing began is stale, not a live errand: a 14:00 "call the plumber"
+        # from three days ago is gone, while a date-only chore ("renew passport")
+        # still rolls forward until done. build_daily_note drops expired items
+        # from the overdue list + count so a chronic timed backlog stops padding
+        # every morning. Anchored on the briefing day-start (after_utc), so it's
+        # deterministic — no wall-clock read.
+        "expired": _is_expired(date_ts_str, row["date"], after_utc),
     }
+
+
+# Grace after a timed reminder's slot before it counts as stale (expired), not a
+# live errand. A day covers "I meant to do it last night" without letting a chore
+# from last week keep padding the overdue list every morning.
+_EXPIRED_GRACE = timedelta(hours=24)
+
+
+def _is_expired(date_ts_str: str, raw_date: str | None, after_utc: str) -> bool:
+    """True when a *timed* reminder aged past the grace window before day-start.
+
+    Only timed reminders expire: an all-day / date-only chore (bare
+    ``YYYY-MM-DD``) keeps rolling forward until it's done. Compares real instants
+    against the tz-aware briefing day-start, never raw ISO text (same offset
+    caveat as ``_is_overdue``)."""
+    if _is_all_day_raw(raw_date) is not False:
+        return False  # date-only or no signal → never expires, keeps rolling
+    due = _parse_iso_datetime(date_ts_str)
+    start = _parse_iso_datetime(after_utc)
+    if due is None or start is None:
+        return False
+    return (start - due) > _EXPIRED_GRACE
 
 
 _WEEKDAYS_EN = (

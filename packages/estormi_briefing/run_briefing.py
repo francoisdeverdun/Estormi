@@ -18,7 +18,6 @@ state in ``runtime``.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -531,16 +530,36 @@ async def _run_critic_repair(
         )
         date_issues += lint_weekdays(candidate, today)
         fact_issues: list[dict] = []
+        fact_result: dict = {}
         if fact_enabled and vision_rows:
-            fact_issues = (
-                await fact_critique_briefing(candidate, vision_rows, today, _fact_llm)
-            ).get("issues") or []
+            fact_result = await fact_critique_briefing(candidate, vision_rows, today, _fact_llm)
+            fact_issues = fact_result.get("issues") or []
             if fact_issues:
                 log.info("fact critic: %d issue(s)", len(fact_issues))
         merged = [*lint_issues, *date_issues, *fact_issues, *(cand_critique.get("issues") or [])]
         if merged:
             cand_critique = {**cand_critique, "issues": merged, "approved": False}
+        # Real-defect count drives the repair loop; a critic outage is advisory
+        # only. Count them before appending the advisory so an unreachable
+        # critic never forces the loop to burn its full repair budget on a draft
+        # that is otherwise clean.
         n_issues = len(cand_critique.get("issues") or [])
+        # Observability: when a critic ran but returned nothing usable (outage,
+        # truncated JSON), surface a non-blocking `critic_unavailable` issue so
+        # the run doesn't report an unchecked briefing as silently approved.
+        for _critic, _res in (("structural", cand_critique), ("fact", fact_result)):
+            if _res.get("critic_error"):
+                log.warning("briefing critic advisory: %s critic unavailable", _critic)
+                cand_critique = {
+                    **cand_critique,
+                    "issues": [
+                        *(cand_critique.get("issues") or []),
+                        {
+                            "type": "critic_unavailable",
+                            "excerpt": f"{_critic}: {_res['critic_error']}",
+                        },
+                    ],
+                }
         log.info(
             "day_vision attempt %d/%d: %d critic issue(s)",
             attempt + 1,
@@ -561,8 +580,11 @@ async def _run_critic_repair(
     # without regenerating the draft. No-op when the line is already a steer.
     if vision_html and provider == "local":
         vision_html = await _condense_readiness_line(vision_html, provider, model)
-        # Enforce tutoiement: the advisory lint+repair loop ships a best draft
-        # that may still vouvoie; this focused pass fixes only the address.
+    # Enforce tutoiement for EVERY provider: the advisory lint+repair loop ships
+    # a best draft that may still vouvoie regardless of who composed it. This
+    # focused pass fixes only the address and self-skips when there is nothing to
+    # fix (zero prose defects), so it is a no-op on a clean cloud draft too.
+    if vision_html:
         vision_html = await _repair_voice(vision_html, provider, model)
 
     if vision_html:
@@ -576,7 +598,6 @@ async def _run_critic_repair(
                 )
         else:
             log.info("briefing critic: approved (no issues)")
-        await _put_setting(db, "knowledge_last_critic", json.dumps(critique)[:2000])
 
     return vision_html, last_rows
 
@@ -594,7 +615,17 @@ def _render_timeline(vision_rows: dict, lang_code: str) -> str:
             end = datetime.fromisoformat(str(e.get("end") or ""))
         except ValueError:
             continue
-        events.append({"title": str(e.get("title") or ""), "start": start, "end": end})
+        # Carry the all-day flag through: an all-day entry parses to a midnight
+        # datetime, so only this flag (not the timestamp) tells the renderer to
+        # label it "Toute la journée" and pin it to the top of the strip.
+        events.append(
+            {
+                "title": str(e.get("title") or ""),
+                "start": start,
+                "end": end,
+                "all_day": bool(e.get("all_day")),
+            }
+        )
     if not events:
         return ""
     day = events[0]["start"].astimezone(LOCAL_TZ).date()

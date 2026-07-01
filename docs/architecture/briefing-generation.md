@@ -99,6 +99,31 @@ or fabricate it. Instead:
   directly — **never an empty section, never a hallucinated one**. `_synthesize_themes`
   only trusts model output that actually follows the `THEME:`/`SOURCE:` structure.
 
+## Deterministic safeguards (code-owned)
+
+Small models drift; these code-side guards keep the drift out of the briefing
+without ever hiding a live item — advisory or fall-back by design, never
+destructive:
+
+- **Cancellation guard.** `_flag_cancelled_events` (`day/day_vision.py`) tags a
+  calendar event `cancelled` when a recent personal/world chunk carries a
+  cancellation cue *and* one of the event's distinctive title tokens. The flag
+  surfaces inline in `build_registry` so a cancelled event never anchors the day
+  as the pivot, and rides into the fact-critic pack. It only flags, never drops.
+- **Reminders line.** `_dont_forget_line` (`compose/build_daily_note.py`) is the
+  deterministic "À ne pas oublier" line — due-today first so a backlog of
+  overdue chores can't fill the cap and evict what's actually due today. A
+  *timed* reminder aged past a 24 h grace before day-start counts as `expired`
+  (`day/day.py:_is_expired`) and is dropped from the list and the overdue count;
+  a date-only chore never expires and keeps rolling.
+- **Audio narration.** The spoken edition (`io/delivery.py`) re-voices the body
+  for TTS, then `narration_regressed` (`lint/narration_lint.py`) falls back to
+  reading the verbatim body when the rewrite has grossly lost content (far
+  shorter, or dropped the title / every clock time / every source). It never
+  falls back to *no* audio. Interpunct list separators become comma pauses and
+  trailing source attributions are stripped for the ear
+  (`memory_core/tts_local.py`).
+
 ## Ownership (generic)
 
 `_format_action` carries each event's `group_type`. In the actionable schedule
@@ -116,6 +141,15 @@ issues the loop regenerates with `format_critic_feedback` injected and keeps the
 fewest-issue draft (`briefing_repair_attempts`, default 1, cap 3). The critic
 must **trust graph-anchored links** — a cross-source connection that names a
 shared place/person/project is the briefing's purpose, not a fusion error.
+
+An unreachable critic is made **visible, never silently "approved"**: both
+`critique_briefing` and `fact_critique_briefing` set `critic_error` when a call
+raises or returns nothing usable, and `_run_critic_repair` turns that into a
+non-blocking `critic_unavailable` advisory issue (it does not count toward the
+repair budget). A cancelled/postponed event is fed to the fact-critic as an
+`[ANNULÉ]` title marker (`_fact_pack_rows`), and the WhatsApp evidence block is
+now dropped **last** — not first — under `FACT_PACK_MAX_CHARS`, so the source
+most likely to contradict a stale draft still reaches the critic.
 
 ## Local vs cloud
 

@@ -246,6 +246,12 @@ def build_registry(rows: dict, date_str: str) -> list[dict]:
         flags = ""
         if a.get("tentative"):
             flags += " (tentative — « peut-être », présence non confirmée)"
+        if a.get("cancelled"):
+            # The cancellation guard (day_vision._flag_cancelled_events) found a
+            # cancellation cue naming this event in the recent window. Flag it
+            # inline so the plan, the writers and the fact-critic all treat it
+            # as cancelled — a cancelled event must never anchor the day.
+            flags += " (ANNULÉ — événement annulé/reporté, ne pas en faire le pivot du jour)"
         if a.get("event_type") == "outOfOffice":
             flags += " (absence — out of office, pas une réunion)"
         elif a.get("event_type") == "focusTime":
@@ -498,6 +504,13 @@ def _human_date(iso: str) -> str:
     return f"{d.day} {_MONTH_SHORT[d.month]}"
 
 
+# The correlation-anchor prefix a registry entry's text can carry — "(fil: …)"
+# for a thread row, "(lié à: …)" for a linked chunk. The SAME chunk can enter
+# the registry under both prefixes (once anchored to its thread, once linked to
+# an event), so it must be stripped before any dedup key or fact fallback reads
+# the bare text — otherwise the two prefixes look like two distinct rows.
+_ANCHOR_PREFIX_RE = re.compile(r"^\((?:fil|lié à):[^)]*\)\s*")
+
 # ISO tokens inside raw chunk text ("2026-06-12T16:00:00+02:00", bare
 # "2026-06-13") — humanised by the stake fallback so machine timestamps never
 # reach the reader.
@@ -552,7 +565,7 @@ def _fact_fallback(entry: dict, language: str = "French") -> str:
     relation, news leak, editorialising) — the raw chunk text it replaces
     carried machine timestamps, mail headers and reminder boilerplate straight
     into the briefing."""
-    text = re.sub(r"^\((?:fil|lié à):[^)]*\)\s*", "", entry.get("text") or "").strip()
+    text = _ANCHOR_PREFIX_RE.sub("", entry.get("text") or "").strip()
     text = _INVISIBLE_RE.sub(" ", text)
     title = _INVISIBLE_RE.sub(" ", (entry.get("title") or "")).strip()
     # A mail subject with the preheader glued on ("Migrate … ￼ MY CONSOLE Hi
@@ -622,7 +635,13 @@ def filter_around(
         # in through a graph/context row (normalised label "agenda").
         if entry["label"] == "agenda" and (entry.get("date") or "")[:10] == date_str[:10]:
             continue
-        key = _norm_key(entry["text"]) or _norm_key(item.get("stake") or "")
+        # Strip the correlation-anchor prefix before keying: the same chunk can
+        # orbit under "(fil: …)" and "(lié à: …)" — two prefixes, one fact — and
+        # must render once, not twice (mirrors the seen-set in
+        # build_daily_note._render_around_html).
+        key = _norm_key(_ANCHOR_PREFIX_RE.sub("", entry["text"])) or _norm_key(
+            item.get("stake") or ""
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -702,7 +721,7 @@ def _other_entry_titles(registry: list[dict]) -> list[tuple[str, str]]:
     for e in registry:
         if e["kind"] == "N":
             continue
-        text = re.sub(r"^\((?:fil|lié à):[^)]*\)\s*", "", e["text"])
+        text = _ANCHOR_PREFIX_RE.sub("", e["text"])
         title = _event_title(text).split(":", 1)[0]
         norm = _norm_key(title)
         if len(norm) >= 6:

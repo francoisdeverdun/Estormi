@@ -17,6 +17,7 @@ import asyncio
 import structlog
 
 from estormi_briefing.compose.prompts import narration_prompt
+from estormi_briefing.lint.narration_lint import narration_regressed
 from estormi_briefing.llm import runtime
 from estormi_ingestion.shared.delivery.vault_sync import write_briefing_audio as _vault_write_audio
 
@@ -70,7 +71,15 @@ async def _generate_spoken_briefing(body: str, title: str, provider: str, model:
         log.exception("TTS: spoken-edition rewrite failed; will read the body verbatim")
         return None
     spoken = (spoken or "").strip()
-    return spoken or None
+    if not spoken:
+        return None
+    # Guard against a stub rewrite (a greeting, a truncated first paragraph): if
+    # the narration has clearly lost the briefing's content, fall back to the
+    # already-trusted verbatim body rather than ship an impoverished audio.
+    if narration_regressed(clean, spoken, title):
+        log.warning("TTS: spoken edition regressed vs body; reading the body verbatim")
+        return None
+    return spoken
 
 
 async def _maybe_attach_audio(

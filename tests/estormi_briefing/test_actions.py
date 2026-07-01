@@ -600,3 +600,53 @@ async def test_recent_whatsapp_backfill_anchors_cutoff_on_briefing_day():
         out = await day_context._fetch_recent_whatsapp(date(2026, 6, 5), hours=48)
 
     assert [c["text"] for c in out] == ["in-window"]
+
+
+async def test_health_chunks_excludes_next_day_labelled_cycle():
+    """B1 (#2): a WHOOP ``date_ts`` is the cycle START — the evening BEFORE the
+    labelled day. On a past-day rebuild the fetch window also returns the
+    NEXT-day-labelled cycle (stamped ~22:xx of the briefing day itself); it must
+    NOT become ``health[0]``. The labelled-briefing-day cycle (stamped the prior
+    evening) leads, and the older trend cycle still rides in.
+
+    Briefing day D = 2026-06-05 (Paris). Cycles labelled D-1/D/D+1 start on the
+    evenings D-2/D-1/D respectively."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Labelled D+1 (2026-06-06): starts the evening of D → 2026-06-05T20:00Z.
+            # >= the 2026-06-04T22:00Z Paris-midnight of day D → must be dropped.
+            {"source": "whoop", "text": "cycle-Dplus1", "date_ts": "2026-06-05T20:00:00+00:00"},
+            # Labelled D (2026-06-05): starts the evening of D-1 → 2026-06-04T20:00Z.
+            # < day-start → kept, newest survivor → health[0].
+            {"source": "whoop", "text": "cycle-D", "date_ts": "2026-06-04T20:00:00+00:00"},
+            # Labelled D-1 (2026-06-04): starts the evening of D-2 → 2026-06-03T20:00Z.
+            # Older trend row — must still ride in.
+            {"source": "whoop", "text": "cycle-Dminus1", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    texts = [c["text"] for c in out]
+    assert "cycle-Dplus1" not in texts
+    assert texts[0] == "cycle-D"
+    assert "cycle-Dminus1" in texts  # trend preserved
+
+
+async def test_health_chunks_keeps_live_same_day_cycle():
+    """B1 (#2): the live same-day case is unchanged. Today's real WHOOP cycle is
+    stamped the prior evening (< today's local midnight), so it survives the
+    day-start filter and leads."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            # Today's cycle (labelled 2026-06-05) — starts the evening before.
+            {"source": "whoop", "text": "today", "date_ts": "2026-06-04T20:00:00+00:00"},
+            {"source": "whoop", "text": "yesterday", "date_ts": "2026-06-03T20:00:00+00:00"},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        out = await day_context._fetch_health_chunks(date(2026, 6, 5))
+
+    assert [c["text"] for c in out] == ["today", "yesterday"]
