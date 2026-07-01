@@ -749,7 +749,7 @@ async def test_repair_loop_merges_lints_and_repairs(actions_db):
         import estormi_briefing.llm.runtime as runtime
 
         runtime.refresh("fr", "")
-        out, out_rows = await _run_critic_repair(
+        out, out_rows, severe = await _run_critic_repair(
             actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
         )
 
@@ -759,6 +759,9 @@ async def test_repair_loop_merges_lints_and_repairs(actions_db):
     assert "label" in feedbacks[1] or "OBJECTIF" in feedbacks[1]
     assert out == clean
     assert out_rows == {"calendar": []}
+    # Structural lint issues (label_not_english) are NOT severe fact types — the
+    # severe-issue set the caller gates on stays empty for a lint-only repair.
+    assert severe == []
 
 
 async def test_repair_loop_passes_composer_flag(actions_db):
@@ -830,7 +833,7 @@ async def test_repair_loop_surfaces_critic_unavailable_advisory(actions_db):
 
         runtime.refresh("fr", "")
         with structlog.testing.capture_logs() as logs:
-            out, _ = await _run_critic_repair(
+            out, _, _severe = await _run_critic_repair(
                 actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
             )
 
@@ -839,3 +842,271 @@ async def test_repair_loop_surfaces_critic_unavailable_advisory(actions_db):
     assert "critic unavailable" in events  # advisory was surfaced
     # And it rode into the persisted critique's issues (logged as unresolved).
     assert any("critic_unavailable" in str(entry) for entry in logs)
+
+
+# ── G1: coherence lint wired into the repair loop ─────────────────────────────
+
+
+def _vision_text(objective: str, body: str) -> str:
+    """A minimal well-formed day-vision (OBJECTIVE/body/AROUND) for repair tests."""
+    return f"OBJECTIVE: {objective}\n\n{body}\n\nAROUND: rien aujourd'hui."
+
+
+async def _run_repair_with_fixed_draft(actions_db, draft: str):
+    """Run _run_critic_repair with a single fixed draft and no-op LLM critics,
+    capturing the repair feedback the coherence lint feeds into the next pass.
+    Returns ``(out, severe, feedbacks)``."""
+    from estormi_briefing.run_briefing import _run_critic_repair
+
+    feedbacks: list[str] = []
+
+    async def fake_vision(today, actions, provider, model, **kw):
+        feedbacks.append(kw.get("critic_feedback") or "")
+        return draft, {"calendar": []}
+
+    async def fake_critique(*a, **kw):
+        return {"issues": [], "approved": True}
+
+    async def fake_fact_critique(*a, **kw):
+        return {"issues": [], "approved": True}
+
+    async def fake_llm(*a, **kw):
+        return ""
+
+    with (
+        patch("estormi_briefing.run_briefing._generate_day_vision", side_effect=fake_vision),
+        patch("estormi_briefing.run_briefing.critique_briefing", side_effect=fake_critique),
+        patch(
+            "estormi_briefing.run_briefing.fact_critique_briefing",
+            side_effect=fake_fact_critique,
+        ),
+        patch("estormi_briefing.llm.runtime._llm_call", side_effect=fake_llm),
+        patch("estormi_briefing.llm.runtime._run_metrics", None),
+    ):
+        import estormi_briefing.llm.runtime as runtime
+
+        runtime.refresh("fr", "")
+        out, _rows, severe = await _run_critic_repair(
+            actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
+        )
+    return out, severe, feedbacks
+
+
+async def test_repair_loop_flags_objective_body_divergence(actions_db):
+    """G1: an objective built on a distinctive entity the MY DAY body never
+    mentions is flagged by the wired coherence lint → the repair pass carries a
+    divergence directive. It is advisory: it never appears in the severe set."""
+    draft = _vision_text(
+        "réussir le festival Solidays et sécuriser le dossier PSCA-42.",
+        "Un paragraphe correct qui décrit la journée avec assez de mots pour "
+        "passer le seuil de densité du lint, en reliant les rendez-vous et les "
+        "tâches entre eux comme il se doit, sur plusieurs phrases complètes qui "
+        "disent ce que la journée signifie et ce qui est en jeu, sans jamais "
+        "nommer ni le festival ni le dossier codé.",
+    )
+    out, severe, feedbacks = await _run_repair_with_fixed_draft(actions_db, draft)
+
+    # The divergence directive rode into the repair feedback (the loop asked for
+    # a realignment), and the draft still shipped (advisory, never blocked).
+    assert any("objectif" in fb.lower() and "corps" in fb.lower() for fb in feedbacks)
+    assert out == draft
+    # Advisory coherence is NOT a severe fact type — the caller's gate stays clear.
+    assert severe == []
+
+
+async def test_repair_loop_no_divergence_when_objective_anchor_in_body(actions_db):
+    """G1 safe direction: when the objective's distinctive anchor DOES appear in
+    the body, the coherence lint stays silent — no divergence directive."""
+    draft = _vision_text(
+        "réussir le festival Solidays sans négliger le reste.",
+        "La journée tourne autour de Solidays : les créneaux du matin préparent "
+        "l'accueil, l'après-midi enchaîne les rendez-vous logistiques, et le tout "
+        "reste tenable en reliant les tâches entre elles sur assez de phrases "
+        "pour passer le seuil de densité que le lint impose au corps de la note.",
+    )
+    out, severe, feedbacks = await _run_repair_with_fixed_draft(actions_db, draft)
+
+    assert not any("objectif" in fb.lower() and "corps" in fb.lower() for fb in feedbacks)
+    assert out == draft
+    assert severe == []
+
+
+# ── C1: severe-issue soft-gate ────────────────────────────────────────────────
+
+
+async def test_run_critic_repair_returns_severe_fact_issues(actions_db):
+    """C1 unit: an unresolved inverted-relation fact issue is surfaced in the
+    returned severe set; a benign advisory (unsupported_claim) is NOT."""
+    from estormi_briefing.run_briefing import _run_critic_repair
+
+    draft = _vision_text(
+        "tenir la revue de midi.",
+        "Un paragraphe suffisamment dense qui décrit la revue de midi et les "
+        "tâches attenantes, en reliant les faits du jour entre eux sur plusieurs "
+        "phrases complètes afin de franchir le seuil de densité imposé par le "
+        "lint, sans bullet ni rubrique d'aucune sorte.",
+    )
+
+    async def fake_vision(today, actions, provider, model, **kw):
+        return draft, {"calendar": [{"when": "12:00", "title": "Revue"}]}
+
+    async def fake_critique(*a, **kw):
+        return {"issues": [], "approved": True}
+
+    async def fake_fact_critique(*a, **kw):
+        # One SEVERE (relation_inverted) + one soft (unsupported_claim).
+        return {
+            "issues": [
+                {"type": "relation_inverted", "excerpt": "X annule Y", "evidence": "Y annule X"},
+                {"type": "unsupported_claim", "excerpt": "peut-être"},
+            ],
+            "approved": False,
+        }
+
+    async def fake_llm(*a, **kw):
+        return ""
+
+    with (
+        patch("estormi_briefing.run_briefing._generate_day_vision", side_effect=fake_vision),
+        patch("estormi_briefing.run_briefing.critique_briefing", side_effect=fake_critique),
+        patch(
+            "estormi_briefing.run_briefing.fact_critique_briefing",
+            side_effect=fake_fact_critique,
+        ),
+        patch("estormi_briefing.llm.runtime._llm_call", side_effect=fake_llm),
+        patch("estormi_briefing.llm.runtime._run_metrics", None),
+    ):
+        import estormi_briefing.llm.runtime as runtime
+
+        runtime.refresh("fr", "")
+        out, _rows, severe = await _run_critic_repair(
+            actions_db, "2026-06-11", {"calendar": [], "reminders": []}, "", "local", "m"
+        )
+
+    assert out == draft  # best draft still returned — never blocked here
+    kinds = {i["type"] for i in severe}
+    assert kinds == {"relation_inverted"}  # only the severe fact type is surfaced
+
+
+def _seed_previous_briefing(vault_dir):
+    """Write one prior briefing JSON into a vault's briefings/ folder."""
+    import json
+
+    briefings = vault_dir / "briefings"
+    briefings.mkdir(parents=True, exist_ok=True)
+    (briefings / "2026-05-01.json").write_text(
+        json.dumps({"date": "2026-05-01", "title": "Briefing — 2026-05-01"}),
+        encoding="utf-8",
+    )
+
+
+async def _run_with_severe_gate(db_path, yaml_path, *, severe, previous_exists):
+    """Drive run() past synthesis with a fixed vision and a chosen severe set,
+    controlling whether a previous vault briefing exists. Returns
+    ``(summary, mock_vault, status)``."""
+    import aiosqlite
+
+    # A reminder gives run() an action so it never short-circuits on "no items".
+    conn = await aiosqlite.connect(db_path)
+    await conn.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date, date_ts) "
+        "VALUES ('rem1', 'h1', 'reminders', 'Préparer le dossier', "
+        "'2026-05-02T07:30:00Z', '2026-05-02T07:30:00+00:00')"
+    )
+    await conn.commit()
+    await conn.close()
+
+    from datetime import datetime as real_datetime
+
+    async def fake_repair(db, today, actions, news_digest, provider, model):
+        return "OBJECTIVE: x\n\nla journée.\n\nAROUND: rien.", {}, severe
+
+    with (
+        patch("estormi_briefing.run_briefing.DB_PATH", db_path),
+        patch(
+            "estormi_briefing.run_briefing._fetch_world_today",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "estormi_briefing.day.day_vision._compute_day_enrichments",
+            new_callable=AsyncMock,
+            return_value={"weather": "", "chained": []},
+        ),
+        patch("estormi_briefing.run_briefing._run_critic_repair", side_effect=fake_repair),
+        patch(
+            "estormi_briefing.run_briefing._previous_briefing_exists",
+            return_value=previous_exists,
+        ),
+        patch("estormi_briefing.run_briefing.datetime") as mock_datetime,
+        patch("estormi_briefing.run_briefing._vault_push_briefing") as mock_vault,
+    ):
+        import estormi_briefing.run_briefing as _rk
+
+        mock_datetime.now.return_value = real_datetime(2026, 5, 2, 10, 0, tzinfo=_rk.LOCAL_TZ)
+        mock_datetime.combine.side_effect = real_datetime.combine
+        mock_datetime.fromisoformat.side_effect = real_datetime.fromisoformat
+        summary = await run(config_path=yaml_path)
+
+    conn = await aiosqlite.connect(db_path)
+    cur = await conn.execute("SELECT value FROM settings WHERE key = 'knowledge_last_run_status'")
+    row = await cur.fetchone()
+    await conn.close()
+    return summary, mock_vault, (row[0] if row else None)
+
+
+async def test_severe_gate_preserves_previous_briefing(tmp_path, db_path, yaml_path):
+    """C1: a severe unresolved fact issue + a previous briefing → the prior
+    briefing is preserved (no overwrite), the run is flagged error."""
+    severe = [{"type": "relation_inverted", "excerpt": "X annule Y"}]
+    summary, mock_vault, status = await _run_with_severe_gate(
+        db_path, yaml_path, severe=severe, previous_exists=True
+    )
+
+    mock_vault.assert_not_called()  # no hollow/false overwrite
+    assert status == "error"
+    assert "relation_inverted" in summary
+
+
+async def test_severe_gate_ships_when_no_previous_briefing(tmp_path, db_path, yaml_path):
+    """C1: a severe issue but NO previous briefing → ship the flawed draft
+    anyway (never leave the user with nothing)."""
+    severe = [{"type": "fact_misattributed", "excerpt": "attribué à tort"}]
+    summary, mock_vault, status = await _run_with_severe_gate(
+        db_path, yaml_path, severe=severe, previous_exists=False
+    )
+
+    mock_vault.assert_called_once()  # shipped rather than suppressed
+    assert status == "ok"
+
+
+async def test_severe_gate_ships_on_advisory_only(tmp_path, db_path, yaml_path):
+    """C1 safe direction: no severe issues (advisory/style only) → always ships,
+    even with a previous briefing on disk."""
+    summary, mock_vault, status = await _run_with_severe_gate(
+        db_path, yaml_path, severe=[], previous_exists=True
+    )
+
+    mock_vault.assert_called_once()
+    assert status == "ok"
+
+
+def test_previous_briefing_exists_reads_vault(tmp_path, monkeypatch):
+    """_previous_briefing_exists reflects the vault: True with a briefing on
+    disk, False for an empty/unconfigured vault, never raising."""
+    import estormi_ingestion.shared.delivery.vault_sync as vs
+    from estormi_briefing.run_briefing import _previous_briefing_exists
+
+    vault = tmp_path / "vault"
+    monkeypatch.setattr(vs, "vault_dir", lambda: vault)
+    assert _previous_briefing_exists() is False  # empty vault
+
+    _seed_previous_briefing(vault)
+    assert _previous_briefing_exists() is True
+
+    # A raising vault must degrade to False (SAFE default: ship, never withhold).
+    def _boom():
+        raise RuntimeError("vault unreadable")
+
+    monkeypatch.setattr("estormi_briefing.run_briefing._vault_list_briefings", _boom)
+    assert _previous_briefing_exists() is False

@@ -485,3 +485,74 @@ def lint_vision(text: str, language: str = "English") -> list[dict]:
                 break
 
     return issues
+
+
+# ── coherence lint (D-E) ────────────────────────────────────────────────────────
+# The objective is the day's through-line; the MY DAY body is what actually gets
+# written. When the objective is built on a distinctive entity ("Solidays",
+# "Meria PSCA-…") that the body's narrative never mentions, the two have diverged
+# and the objective is describing a different day. Advisory only — it feeds one
+# repair attempt, never blocks shipping.
+#
+# A "distinctive anchor" is a proper-noun-quality token: a capitalised word past
+# the sentence start, an ALL-CAPS/mixed token, or one carrying a digit (a code
+# like "PSCA-42"). Bare lowercase common words are NOT anchors — they overlap by
+# coincidence and would flag aligned days. This keeps the bar HIGH: the fix fires
+# only when EVERY such anchor in the objective is entirely absent from the body.
+_ANCHOR_TOKEN_RE = re.compile(r"[0-9A-Za-zÀ-ÿ]+(?:[-'][0-9A-Za-zÀ-ÿ]+)*")
+
+
+def _distinctive_anchors(objective: str) -> set[str]:
+    """The objective's proper-noun / coded anchors, lowercased for comparison.
+
+    A token qualifies when it is capitalised (a name), contains a digit (a code),
+    or is an internal-hyphen/mixed token — and is not a stopword. The first word
+    of the objective is skipped so a sentence-initial capital ("La journée…")
+    never counts as a name.
+    """
+    anchors: set[str] = set()
+    for i, tok in enumerate(_ANCHOR_TOKEN_RE.findall(objective or "")):
+        low = tok.lower()
+        if low in _STOPWORDS_FR or len(low) < 2:
+            continue
+        has_digit = any(c.isdigit() for c in tok)
+        # Capitalised past the first token (sentence-initial caps don't count),
+        # or a token bearing a digit anywhere (a reference code).
+        capitalised = i > 0 and tok[:1].isupper()
+        if capitalised or has_digit:
+            anchors.add(low)
+    return anchors
+
+
+def objective_body_divergence(
+    objective_html: str, body_html: str, language: str = "French"
+) -> list[dict]:
+    """Advisory coherence check: does the objective's anchor survive into the body?
+
+    Returns a single ``objective_body_divergence`` issue ONLY when the objective
+    is built on distinctive entity/code anchors and NONE of them appears in the
+    MY DAY body — a clear divergence (the objective describes "Solidays" while the
+    body's through-line never mentions it). Prefix-tolerant so an inflected form
+    still counts as present. Empty list (no issue) whenever the objective has no
+    distinctive anchor, or any anchor is present in the body — the HIGH bar that
+    keeps ordinary aligned briefings from flagging. Never blocks shipping; it only
+    feeds one repair attempt in the critic loop.
+    """
+    anchors = _distinctive_anchors(objective_html or "")
+    if not anchors:
+        return []  # no distinctive anchor → nothing provable, stay silent
+    # Tokenise the body with the SAME anchor regex so an internal-hyphen code
+    # ("PSCA-42") stays one token on both sides; prefix-6 tolerates inflection.
+    body_prefixes = {w.lower()[:6] for w in _ANCHOR_TOKEN_RE.findall(body_html or "")}
+    for anchor in anchors:
+        if anchor[:6] in body_prefixes:
+            return []  # at least one objective anchor lands in the body → aligned
+    return [
+        {
+            "type": "objective_body_divergence",
+            "excerpt": _excerpt(objective_html or "")
+            + f" — l'objectif s'appuie sur « {', '.join(sorted(anchors)[:3])} », "
+            "absent(s) du corps MY DAY : aligne l'objectif sur ce que le corps "
+            "développe réellement, ou inversement",
+        }
+    ]

@@ -1101,6 +1101,73 @@ def test_dont_forget_line_due_today_survives_overdue_backlog():
     assert "Retard 7" not in out
 
 
+def test_dont_forget_line_resolved_evidence_demoted_not_hidden():
+    """R1: an overdue reminder a message proved DONE (resolved_evidence) is
+    DEMOTED out of the red "⚠ en retard" urgency — rendered plain but STILL
+    listed (no-soft-hide). A live overdue in the same line stays red."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [
+        {
+            "title": "Location véhicule",
+            "overdue": True,
+            "days_overdue": 5,
+            "resolved_evidence": True,
+        },
+        {"title": "Appeler le plombier", "overdue": True, "days_overdue": 2},
+    ]
+    out = _dont_forget_line(reminders, "fr")
+    # Demoted item is still present (never removed) …
+    assert "Location véhicule" in out
+    # … but NOT wrapped in the red overdue span nor badged "en retard".
+    assert 'color:#dc2626">⚠ Location véhicule' not in out
+    # The live overdue keeps its red badge — demotion is per-item, not global.
+    assert 'color:#dc2626">⚠ Appeler le plombier (en retard)' in out
+
+
+def test_dont_forget_line_no_resolved_evidence_stays_red():
+    """R1 safe direction: without resolved_evidence, an overdue reminder keeps
+    its red "⚠ en retard" badge — the demotion never fires by default."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [{"title": "Location véhicule", "overdue": True, "days_overdue": 5}]
+    out = _dont_forget_line(reminders, "fr")
+    assert 'color:#dc2626">⚠ Location véhicule (en retard)' in out
+
+
+def test_dont_forget_line_overdue_ordered_by_recency_with_age_affordance():
+    """R2: live overdue are ordered most-recently-overdue first (smallest
+    days_overdue leads) and each carries a compact "· depuis N j" age
+    affordance. No item is collapsed or dropped (no-soft-hide) — ordering +
+    affordance only."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    reminders = [
+        {"title": "Vieux dossier", "overdue": True, "days_overdue": 12},
+        {"title": "Slip récent", "overdue": True, "days_overdue": 1},
+        {"title": "Milieu", "overdue": True, "days_overdue": 4},
+    ]
+    out = _dont_forget_line(reminders, "fr")
+    # Most-recently-overdue first: 1j before 4j before 12j.
+    assert out.index("Slip récent") < out.index("Milieu") < out.index("Vieux dossier")
+    # Age affordance present for each.
+    assert "depuis 1 j" in out and "depuis 4 j" in out and "depuis 12 j" in out
+    # Every item still fully shown — nothing collapsed into "+N anciens".
+    for title in ("Vieux dossier", "Slip récent", "Milieu"):
+        assert title in out
+    assert "anciens" not in out
+
+
+def test_dont_forget_line_no_age_affordance_when_days_overdue_absent():
+    """R2 safe/back-compat: a legacy overdue dict carrying no ``days_overdue``
+    key renders red with no "depuis" affordance and never crashes."""
+    from estormi_briefing.compose.build_daily_note import _dont_forget_line
+
+    out = _dont_forget_line([{"title": "Ancien truc", "overdue": True}], "fr")
+    assert 'color:#dc2626">⚠ Ancien truc (en retard)' in out
+    assert "depuis" not in out
+
+
 def test_build_note_places_timeline_and_reminders_inside_my_day():
     vision = (
         "OBJECTIVE: La revue de 10h ouvre la journée.\n\n"

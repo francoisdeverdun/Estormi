@@ -120,6 +120,40 @@ def _strip_accents(text: str) -> str:
     )
 
 
+# Bulk/marketing markers that unmask a mass mailing: an unsubscribe/list-cleanup
+# footer, a "voir en ligne" web-version link, an explicit "newsletter", or the
+# legal disclaimer boilerplate promotional finance mail carries. A bulk mail is
+# broadcast to a list, so anchoring a personal reminder to it and recasting it as
+# tailored advice (the Meria-promo × "crypto" bug) is a fabricated correlation.
+# Narrow, distinctive tokens only — accent-stripped + lowercase, matched against
+# accent-stripped text so "désinscrire"/"desinscrire" both hit.
+_PROMOTIONAL_MARKERS = (
+    "se desinscrire",
+    "desabonner",
+    "unsubscribe",
+    "ne plus recevoir",
+    "list-unsubscribe",
+    "voir la version en ligne",
+    "newsletter",
+    "aucun element ne constitue un conseil",
+)
+
+
+def _is_promotional_chunk(chunk: dict) -> bool:
+    """True for a bulk/marketing mail chunk that must never anchor a correlation.
+
+    Gated on ``source == 'mail'`` and an EXACT distinctive bulk/legal marker
+    (unsubscribe footer, web-version link, "newsletter", or the finance
+    disclaimer boilerplate) so a genuine one-to-one personal mail never trips.
+    Advisory-only: a promotional chunk is merely barred from *anchoring* a
+    correlation — it is never deleted and can still surface elsewhere.
+    """
+    if (chunk.get("source") or "") != "mail":
+        return False
+    text = _strip_accents(f"{chunk.get('title') or ''} {chunk.get('text') or ''}")
+    return any(m in text for m in _PROMOTIONAL_MARKERS)
+
+
 def _is_stale_correlation(chunk: dict, day: date) -> bool:
     """True when a correlated chunk is closed or too old to be a live to-do.
 
@@ -441,6 +475,18 @@ async def _correlate_event(event: dict, after: str = "", day: date | None = None
         if day is not None and _is_stale_correlation(chunk, day):
             log.info(
                 "correlation: dropped stale/closed chunk %s for event %r",
+                cid,
+                event.get("title"),
+            )
+            continue
+        # A bulk marketing mail must never ANCHOR a correlation: it is broadcast
+        # to a list, so tying it to a personal reminder and recasting it as
+        # tailored advice (the Meria-promo × "crypto" bug) is fabricated. Barred
+        # from anchoring only — the chunk is not deleted and can surface
+        # elsewhere.
+        if _is_promotional_chunk(chunk):
+            log.info(
+                "correlation: dropped promotional mail chunk %s for event %r",
                 cid,
                 event.get("title"),
             )

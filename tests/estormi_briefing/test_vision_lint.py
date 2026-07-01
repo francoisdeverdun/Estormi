@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from estormi_briefing.lint.vision_lint import lint_vision, stage_issues
+from estormi_briefing.lint.vision_lint import (
+    lint_vision,
+    objective_body_divergence,
+    stage_issues,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -381,3 +385,36 @@ def test_repeated_content_bigrams_ignores_stopwords():
         )
         >= 3
     )
+
+
+# ── objective ↔ body coherence (P-COHERENCE / D-E) ────────────────────────────
+
+
+def test_objective_body_divergence_flags_missing_anchor():
+    """The objective is built on a distinctive entity the body's through-line
+    never mentions — a clear divergence that feeds one repair attempt."""
+    objective = "La journée se joue autour de Solidays et du dossier PSCA-42."
+    body = "Deux réunions ce matin, une revue technique, puis du sport le soir."
+    issues = objective_body_divergence(objective, body, "French")
+    assert [i["type"] for i in issues] == ["objective_body_divergence"]
+
+
+def test_objective_body_divergence_silent_when_anchor_present():
+    """The objective's anchor lands in the body — aligned, so no issue. This is
+    the safe case the HIGH bar must never flag."""
+    objective = "La journée se joue autour de Solidays et du dossier PSCA-42."
+    # A single shared anchor (Solidays, inflection-tolerant) is enough.
+    body = "Le festival Solidays occupe la soirée ; prépare le sac avant de partir."
+    assert objective_body_divergence(objective, body, "French") == []
+    # A hyphenated code survives the split and still matches (psca-42 in body).
+    assert objective_body_divergence("Focus sur PSCA-42.", "On avance le psca-42 ce matin.") == []
+
+
+def test_objective_body_divergence_silent_without_distinctive_anchor():
+    """An objective with no proper-noun/coded anchor is unprovable — the check
+    stays silent rather than flag on coincidental common-word overlap."""
+    objective = "Une journée dense et productive, à mener avec calme."
+    body = "Rien de particulier, quelques mails et une pause déjeuner."
+    assert objective_body_divergence(objective, body, "French") == []
+    # A sentence-initial capital is not treated as a name.
+    assert objective_body_divergence("La revue prime aujourd'hui.", body, "French") == []

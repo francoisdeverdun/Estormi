@@ -102,6 +102,7 @@ _CHROME: dict[str, dict[str, str]] = {
         "all_day": "all day",
         "go_deeper": "Watch — go deeper",
         "overdue_short": "overdue",
+        "overdue_since": "· {n}d",
     },
     "fr": {
         "title": "Briefing du {date}",
@@ -128,6 +129,7 @@ _CHROME: dict[str, dict[str, str]] = {
         "all_day": "toute la journée",
         "go_deeper": "Veille — aller plus loin",
         "overdue_short": "en retard",
+        "overdue_since": "· depuis {n} j",
     },
 }
 
@@ -918,18 +920,36 @@ def _dont_forget_line(reminders: list[dict], lang: str = "en", cap: int = 6) -> 
     zero hallucination surface.
 
     Due-today leads so a backlog of overdue chores can't fill the cap and evict
-    what's actually due today — the one thing this line must never drop."""
-    overdue = [r for r in reminders if r.get("overdue")]
+    what's actually due today — the one thing this line must never drop.
+
+    Within the overdue tail: still-live items lead, ordered by recency of the
+    due date (most-recently-overdue first) so the freshest slip reads first, and
+    each carries a compact "· depuis N j" age affordance (R2). A reminder a
+    recent message proves DONE (``resolved_evidence``) is DEMOTED out of the red
+    urgency — rendered plain and listed last, never hidden (R1, no-soft-hide)."""
     today = [r for r in reminders if not r.get("overdue")]
+    # Live overdue: most-recently-overdue first (smallest days_overdue leads).
+    live_overdue = [r for r in reminders if r.get("overdue") and not r.get("resolved_evidence")]
+    live_overdue.sort(key=lambda r: int(r.get("days_overdue") or 0))
+    # Demoted overdue (completion-evidence): kept, listed last, no red urgency.
+    done_overdue = [r for r in reminders if r.get("overdue") and r.get("resolved_evidence")]
+
     parts: list[str] = []
-    for r in today + overdue:
+    for r in today + live_overdue + done_overdue:
         title = str(r.get("title") or "").strip()
         if not title:
             continue
         when = str(r.get("when") or "").strip()
         bit = _esc(title)
-        if r.get("overdue"):
-            bit = f'<span style="color:#dc2626">⚠ {bit} ({_esc(_t(lang, "overdue_short"))})</span>'
+        if r.get("overdue") and not r.get("resolved_evidence"):
+            since = ""
+            days = int(r.get("days_overdue") or 0)
+            if days > 0:
+                since = " " + _esc(_t(lang, "overdue_since", n=days))
+            bit = (
+                f'<span style="color:#dc2626">⚠ {bit} '
+                f"({_esc(_t(lang, 'overdue_short'))}){since}</span>"
+            )
         elif when and when.lower() != "all day" and when != "00:00":
             # Midnight is how a date-only reminder renders its "time" — showing
             # "— 00:00" reads as a deadline that doesn't exist.

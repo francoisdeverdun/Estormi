@@ -128,6 +128,10 @@ def _format_action(row: aiosqlite.Row, after_utc: str = "") -> dict:
         # site) and avoid suggesting a commute on a remote day.
         "working_location": working_location,
         "overdue": _is_overdue(date_ts_str, after_utc),
+        # Whole days past due (0 when not overdue) — the overdue list orders by
+        # this (most-recently-overdue first) and shows a "· depuis N j" age
+        # affordance. Deterministic (anchored on the day-start, not now()).
+        "days_overdue": _days_overdue(date_ts_str, after_utc),
         # A *timed* reminder whose slot passed more than a day before this
         # briefing began is stale, not a live errand: a 14:00 "call the plumber"
         # from three days ago is gone, while a date-only chore ("renew passport")
@@ -159,6 +163,23 @@ def _is_expired(date_ts_str: str, raw_date: str | None, after_utc: str) -> bool:
     if due is None or start is None:
         return False
     return (start - due) > _EXPIRED_GRACE
+
+
+def _days_overdue(date_ts_str: str, after_utc: str) -> int:
+    """Whole days between a reminder's due instant and the briefing day-start.
+
+    The age affordance the overdue list shows ("· depuis N j"): how long a live
+    reminder has been sitting past due. Anchored on the tz-aware day-start
+    (``after_utc``), never wall-clock, so a past-day rebuild is deterministic;
+    compares real instants, never raw ISO text (same offset caveat as
+    ``_is_overdue``). Floors at 0 — a not-yet-overdue or unparseable due date
+    yields 0, so the caller can gate the affordance on ``> 0``."""
+    due = _parse_iso_datetime(date_ts_str)
+    start = _parse_iso_datetime(after_utc)
+    if due is None or start is None:
+        return 0
+    delta_days = (start - due).days
+    return delta_days if delta_days > 0 else 0
 
 
 _WEEKDAYS_EN = (

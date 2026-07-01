@@ -842,3 +842,72 @@ def test_flag_cancelled_events_skips_event_without_distinctive_token():
     n = day_vision._flag_cancelled_events(calendar, scan)
     assert n == 0
     assert "cancelled" not in calendar[0]
+
+
+# ── promotional-mail correlation guard (P1) ───────────────────────────────────
+
+
+def test_is_promotional_chunk_fires_on_bulk_and_legal_markers():
+    """A mail carrying an unsubscribe footer, a web-version link, "newsletter" or
+    the finance disclaimer boilerplate is a mass mailing — never an anchor."""
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "text": "Nos offres crypto. Pour ne plus recevoir, se désinscrire ici."}
+    )
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "title": "Newsletter Meria", "text": "Voir la version en ligne."}
+    )
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "text": "Aucun élément ne constitue un conseil en investissement."}
+    )
+
+
+def test_is_promotional_chunk_spares_personal_mail_and_non_mail():
+    """A genuine one-to-one mail with no bulk marker stays anchorable, and the
+    guard is gated on source=='mail' so a WhatsApp line never trips it."""
+    # A personal mail that even MENTIONS "crypto" but carries no bulk marker.
+    assert not day_vision._is_promotional_chunk(
+        {
+            "source": "mail",
+            "text": "Salut, on se voit demain pour parler de ton portefeuille crypto ?",
+        }
+    )
+    # The exact bulk marker in a non-mail source must not fire (source gate).
+    assert not day_vision._is_promotional_chunk(
+        {"source": "whatsapp", "text": "tu peux te désinscrire de la newsletter du club"}
+    )
+
+
+async def test_correlate_event_excludes_promotional_mail_from_anchoring():
+    """The Meria-promo × "crypto" bug: a bulk marketing mail must not anchor a
+    correlation, even when it clears retrieval. A genuine personal mail on the
+    same subject still links."""
+
+    async def _fake(payload, timeout=10.0):
+        if "min_score" in payload:  # dense arm
+            return [
+                {
+                    "id": "promo",
+                    "text": "Meria — profitez de nos frais réduits sur la crypto. "
+                    "Pour ne plus recevoir nos emails, se désinscrire ici.",
+                    "source": "mail",
+                    "date": "2026-05-30T08:00:00+00:00",
+                },
+                {
+                    "id": "personal",
+                    "text": "Je t'ai envoyé le virement pour l'achat crypto qu'on avait convenu.",
+                    "source": "mail",
+                    "date": "2026-05-30T09:00:00+00:00",
+                },
+            ]
+        return []
+
+    with patch.object(day_vision, "_search_mcp_memory", AsyncMock(side_effect=_fake)):
+        out = await day_vision._correlate_event(
+            {"title": "Point crypto", "when_label": "2026-06-01 (Monday)"},
+            day=date(2026, 6, 1),
+        )
+
+    assert out is not None
+    ids = [c["id"] for c in out["chunks"]]
+    assert "promo" not in ids  # bulk mail barred from anchoring
+    assert ids == ["personal"]  # the genuine personal mail still links

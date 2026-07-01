@@ -650,3 +650,114 @@ async def test_health_chunks_keeps_live_same_day_cycle():
         out = await day_context._fetch_health_chunks(date(2026, 6, 5))
 
     assert [c["text"] for c in out] == ["today", "yesterday"]
+
+
+# ── day: _days_overdue helper (R2) ───────────────────────────────────────────
+
+
+def test_days_overdue_counts_whole_days_and_floors_at_zero():
+    """R2: whole days between the due instant and the briefing day-start; a
+    not-yet-overdue or unparseable due date floors at 0 (so the caller can gate
+    the affordance on ``> 0``)."""
+    # Due 2026-04-28 22:00Z, day-start 2026-05-02 22:00Z → 4 whole days.
+    assert day._days_overdue("2026-04-28T22:00:00+00:00", "2026-05-02T22:00:00+00:00") == 4
+    # Not overdue (due after day-start) → 0, not negative.
+    assert day._days_overdue("2026-05-10T22:00:00+00:00", "2026-05-02T22:00:00+00:00") == 0
+    # Offset spelling is irrelevant — instants compared, not raw ISO text.
+    assert day._days_overdue("2026-04-30T00:00:00Z", "2026-05-02T22:00:00+00:00") == 2
+    # Unparseable → 0.
+    assert day._days_overdue("not-a-date", "2026-05-02T22:00:00+00:00") == 0
+
+
+async def test_fetch_daily_actions_stamps_days_overdue(actions_db):
+    """R2: an overdue reminder carries a ``days_overdue`` count on its action."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Tâche en retard", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    # No completion evidence in the recent window.
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(return_value=[])):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True
+    # Due 2026-04-28 22:00Z; May-3 Paris day-start = 2026-05-02 22:00Z → 4 days.
+    assert r["days_overdue"] == 4
+
+
+# ── day_context: completion-evidence reconciliation (R1) ─────────────────────
+
+
+async def test_completion_evidence_demotes_overdue_reminder(actions_db):
+    """R1 fires: a recent mail proving an overdue reminder DONE (a strong cue +
+    a distinctive title token) sets ``resolved_evidence=True`` on the action."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # Strong completion cue ("terminée") co-occurring with a distinctive
+        # title token ("cogefrem").
+        return [
+            {"source": "mail", "title": "Retour", "text": "La location Cogefrem est terminée."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True  # still overdue by date …
+    assert r.get("resolved_evidence") is True  # … but flagged done — demoted, not hidden
+
+
+async def test_completion_evidence_does_not_demote_unrelated_mail(actions_db):
+    """R1 safe direction: a completion cue in UNRELATED chatter (no distinctive
+    title-token overlap) must NOT demote a live errand."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # "terminée" is present but talks about something else entirely — no
+        # shared distinctive token, so the errand must stay live.
+        return [
+            {"source": "mail", "title": "Facture", "text": "La réunion budget est terminée."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    r = result["reminders"][0]
+    assert r["overdue"] is True
+    assert r.get("resolved_evidence") is not True
+
+
+async def test_completion_evidence_needs_strong_cue_not_mere_mention(actions_db):
+    """R1 safe direction: a message that names the errand but carries NO strong
+    completion cue (mere intent / mention) must NOT demote it."""
+    db = actions_db
+    await db.execute(
+        "INSERT INTO chunks (id, content_hash, source, title, date_ts) VALUES (?,?,?,?,?)",
+        ("r1", "h1", "reminders", "Location véhicule Cogefrem", "2026-04-28T22:00:00+00:00"),
+    )
+    await db.commit()
+
+    async def _fake(payload, timeout=12.0):
+        # Names "Cogefrem" but only expresses intent — no completion cue.
+        return [
+            {"source": "mail", "title": "À faire", "text": "Il faut relancer Cogefrem demain."},
+        ]
+
+    with patch.object(day_context, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        result = await _fetch_daily_actions(db, date(2026, 5, 3))
+
+    assert result["reminders"][0].get("resolved_evidence") is not True

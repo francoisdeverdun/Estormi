@@ -13,7 +13,11 @@ from __future__ import annotations
 import os
 from datetime import date
 
+import structlog
+
 from estormi_briefing.io.mcp_io import _fetch_around_mcp, _search_mcp_memory
+
+log = structlog.get_logger()
 
 # How many world chunks the past-follow-up RAG search may surface for the
 # day-vision (developing-story context drawn from the whole world corpus).
@@ -23,6 +27,16 @@ _WORLD_FOLLOWUP_LIMIT = int(os.getenv("BRIEFING_WORLD_FOLLOWUP_LIMIT", "8"))
 # news". 0 = strictly the briefing day; the default of 1 tolerates timezone
 # skew between ingest (UTC) and the local briefing day.
 _WORLD_WINDOW_DAYS = int(os.getenv("BRIEFING_WORLD_WINDOW_DAYS", "1"))
+
+# Content-date recency floor for the daily "🌍 Le monde" block. ``fetch_around``
+# windows on a chunk's ``date_ts`` (its ingest/publish timestamp), but a chunk
+# re-ingested late can carry a recent ``date_ts`` while its own CONTENT date
+# (the "31 mars 2026" it reports) is months old — that stale item then leaks
+# into today's news. This floor drops a chunk whose OWN parseable date is more
+# than this many days before the briefing day. Generous (10 d) so genuinely
+# recent items are never touched; undated/unparseable chunks always pass
+# through (degrade-soft — never drop what we can't prove is stale).
+_WORLD_CONTENT_MAX_AGE_DAYS = int(os.getenv("BRIEFING_WORLD_CONTENT_MAX_AGE_DAYS", "10"))
 
 
 def _parse_world_source_key(source_id: str) -> str:
@@ -78,6 +92,44 @@ def _group_world_items(chunks: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
+def _chunk_content_date(chunk: dict) -> date | None:
+    """The chunk's OWN content date (``date`` field, ``YYYY-MM-DD``), or None.
+
+    Only the leading ISO date is read; anything unparseable returns None so the
+    recency floor leaves the chunk in place (degrade-soft)."""
+    raw = str(chunk.get("date") or "")[:10]
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _apply_content_recency_floor(chunks: list[dict], day: date) -> list[dict]:
+    """Drop world chunks whose OWN content date is clearly stale for `day`.
+
+    A chunk is dropped only when it carries a parseable ``date`` more than
+    ``_WORLD_CONTENT_MAX_AGE_DAYS`` before the briefing day — a months-old item
+    that slipped past the ``date_ts`` window. Recent items and any chunk without
+    a parseable date are kept untouched, so this never empties a live section."""
+    floor = _WORLD_CONTENT_MAX_AGE_DAYS
+    kept: list[dict] = []
+    dropped = 0
+    for chunk in chunks:
+        content_date = _chunk_content_date(chunk)
+        if content_date is not None and (day - content_date).days > floor:
+            dropped += 1
+            continue
+        kept.append(chunk)
+    if dropped:
+        log.info(
+            "world corpus: dropped %d stale chunk(s) (content date > %d d before %s)",
+            dropped,
+            floor,
+            day.isoformat(),
+        )
+    return kept
+
+
 async def _fetch_world_today(day: date, limit: int = 400) -> list[dict]:
     """Today's ``world``-corpus chunks (news / RSS / video) via ``fetch_around``.
 
@@ -87,8 +139,12 @@ async def _fetch_world_today(day: date, limit: int = 400) -> list[dict]:
     ``window_days`` stays the look-BACK so the timezone-skew tolerance is kept on
     the lag side. Without this cap the leaked dates also get whitelisted by the
     date-lint and propagate into the distill training corpus.
+
+    A content-date recency floor then drops any chunk whose OWN date is clearly
+    stale — the ``date_ts`` window alone lets a late-ingested months-old item
+    leak in with a recent timestamp.
     """
-    return await _fetch_around_mcp(
+    chunks = await _fetch_around_mcp(
         {
             "date": day.isoformat(),
             "window_days": _WORLD_WINDOW_DAYS,
@@ -98,6 +154,7 @@ async def _fetch_world_today(day: date, limit: int = 400) -> list[dict]:
         },
         timeout=20.0,
     )
+    return _apply_content_recency_floor(chunks, day)
 
 
 async def _fetch_world_followup(query: str, limit: int = _WORLD_FOLLOWUP_LIMIT) -> list[dict]:
