@@ -37,7 +37,7 @@ keyring>=25.0.0
 # Security floor: cryptography < 48.0.1 carries GHSA-537c-gmf6-5ccf. Bounded
 # <49 because the 49.x major is unvalidated against the ES256 APNs signing path
 # (apns_push.py) — bump deliberately after testing, like APScheduler<4.
-cryptography>=48.0.1,<49
+cryptography>=49.0.0,<50
 openpyxl>=3.1.0
 python-pptx>=1.0.0
 python-docx>=1.2.0
