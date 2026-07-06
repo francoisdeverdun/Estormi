@@ -50,4 +50,4 @@ jinja2>=3.1.6
 # connector (extract_python / extract_js / …) and ships the grammars as wheels.
 # Bundle pins (including the full tree-sitter-* grammar set) live in
 # requirements-bundle.txt.
-graphifyy>=0.8.19
+graphifyy>=0.9.8
