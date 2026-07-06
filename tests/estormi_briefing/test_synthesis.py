@@ -682,11 +682,16 @@ def test_reanchor_relative_time_keeps_same_day_deictic():
 def test_reanchor_relative_time_covers_multiple_deictics():
     from estormi_briefing.compose.synthesis import _reanchor_relative_time
 
+    # Each deictic resolves to the day it actually names: "aujourd'hui" is the
+    # source day, but "hier"/"demain" are offset ±1 from it — anchoring them to
+    # the bare source date would be off by a day.
     text = "- Vote hier, résultats aujourd'hui, débat demain. [SOURCE: Le Monde | 2026-06-25]"
     out = _reanchor_relative_time(text, "2026-07-01")
     for stale in ("hier", "aujourd'hui", "demain"):
         assert stale not in out
-    assert out.count("le 2026-06-25") == 3
+    assert "le 2026-06-24" in out  # hier  → source − 1
+    assert "le 2026-06-25" in out  # aujourd'hui → source
+    assert "le 2026-06-26" in out  # demain → source + 1
 
 
 # ── W3: doubled "→ Impact:" dedup ─────────────────────────────────────────────

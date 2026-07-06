@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date, timedelta
 
 import structlog
 
@@ -185,17 +186,20 @@ def _strip_ungrounded_impacts(text: str) -> str:
 # a trailing "[SOURCE: … | YYYY-MM-DD]" marker. The date is the newest source's.
 _SOURCE_DATE_RE = re.compile(r"\[SOURCE:[^\]]*\|\s*(\d{4}-\d{2}-\d{2})\s*\]\s*$")
 # Relative-time deictics that only make sense on the day the event happened. A
-# bullet resolved to an EARLIER date has these re-anchored to the absolute day
-# so a D-1 item ("… ce soir") isn't read as tonight when shown the day after.
-# Word-bounded, French only; the value is the absolute-day replacement.
-_RELATIVE_TIME_SUBS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\bce soir\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\bcet après-midi\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\bce matin\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\bcette nuit\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\baujourd'hui\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\bdemain\b", re.IGNORECASE), "le {day}"),
-    (re.compile(r"\bhier\b", re.IGNORECASE), "le {day}"),
+# bullet resolved to an EARLIER date has these re-anchored to an absolute day so
+# a D-1 item ("… ce soir") isn't read as tonight when shown the day after.
+# Word-bounded, French only. Each entry carries a DAY OFFSET from the source
+# date: same-day deictics resolve to the source day itself (0), while "demain"
+# and "hier" are relative to that day and must shift by ±1 — anchoring them to
+# the bare source date would be off by a day.
+_RELATIVE_TIME_SUBS: tuple[tuple[re.Pattern[str], int], ...] = (
+    (re.compile(r"\bce soir\b", re.IGNORECASE), 0),
+    (re.compile(r"\bcet après-midi\b", re.IGNORECASE), 0),
+    (re.compile(r"\bce matin\b", re.IGNORECASE), 0),
+    (re.compile(r"\bcette nuit\b", re.IGNORECASE), 0),
+    (re.compile(r"\baujourd'hui\b", re.IGNORECASE), 0),
+    (re.compile(r"\bdemain\b", re.IGNORECASE), 1),
+    (re.compile(r"\bhier\b", re.IGNORECASE), -1),
 )
 
 
@@ -206,8 +210,10 @@ def _reanchor_relative_time(text: str, briefing_day: str) -> str:
     soir (23h)"). Shown the day AFTER, "ce soir" now reads as tonight — a
     factual drift. Deterministic re-anchoring: when a bullet's RESOLVED citation
     date (the ``[SOURCE: … | date]`` marker) is strictly before ``briefing_day``,
-    replace each relative-time deictic with the absolute source day ("le
-    2026-06-30"). A SAME-DAY (or future) bullet keeps "ce soir" untouched — the
+    replace each relative-time deictic with the absolute day it names. Same-day
+    deictics ("ce soir", "aujourd'hui") resolve to the source day; "demain" and
+    "hier" are offset from it (source day ±1) so they land on the day the source
+    actually meant. A SAME-DAY (or future) bullet keeps "ce soir" untouched — the
     deixis is still correct. Non-bullet lines and bullets with no resolvable
     date pass through unchanged (never worse than current)."""
     out: list[str] = []
@@ -216,9 +222,15 @@ def _reanchor_relative_time(text: str, briefing_day: str) -> str:
         if not m or m.group(1) >= briefing_day:
             out.append(line)
             continue
+        try:
+            source_date = date.fromisoformat(m.group(1))
+        except ValueError:
+            out.append(line)
+            continue
         body = line[: m.start()]
-        for pattern, repl in _RELATIVE_TIME_SUBS:
-            body = pattern.sub(repl.format(day=m.group(1)), body)
+        for pattern, offset in _RELATIVE_TIME_SUBS:
+            target = (source_date + timedelta(days=offset)).isoformat()
+            body = pattern.sub(f"le {target}", body)
         out.append(body + line[m.start() :])
     return "\n".join(out)
 
