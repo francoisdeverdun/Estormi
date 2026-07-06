@@ -10,6 +10,13 @@ updates:
   # so point Dependabot at the real ones: the contributor floor and the pinned
   # bundle/lock under requirements/. Otherwise no Python security bumps are ever
   # proposed — the bundled wheels are the largest attack surface.
+  #
+  # Dependabot bumps the flat bundle/floor pins but can't re-resolve the lock, so
+  # a group PR lands with the lock stale (and sometimes an unsatisfiable pin like
+  # numpy past mistral-common's <2.4 cap). The `Requirements consistency` CI
+  # guard (.github/workflows/requirements-consistency.yml) fails such a PR fast
+  # with the fix: run `make relock` locally (regenerate the lock from the floors,
+  # re-derive the bundle to match), then commit both.
   - package-ecosystem: pip
     directories:
       - "/packages/estormi_server"
