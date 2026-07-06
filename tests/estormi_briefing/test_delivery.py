@@ -28,12 +28,14 @@ def test_collapse_summary_names_the_outage_and_count():
 
 
 async def test_spoken_edition_returns_stripped_narration():
+    # A faithful (non-regressed) rewrite is returned trimmed. The narration opens
+    # on the title line, as the prompt mandates, so the regression guard passes.
     with (
-        patch("memory_core.tts_local.html_to_segments", return_value=["A sentence."]),
-        patch.object(runtime, "_llm_call", AsyncMock(return_value="  Narration text.  ")),
+        patch("memory_core.tts_local.html_to_segments", return_value=["Title. A sentence."]),
+        patch.object(runtime, "_llm_call", AsyncMock(return_value="  Title. Narration text.  ")),
     ):
         out = await delivery._generate_spoken_briefing("<p>A sentence.</p>", "Title", "local", "m")
-    assert out == "Narration text."
+    assert out == "Title. Narration text."
 
 
 async def test_spoken_edition_none_when_body_is_empty():
@@ -53,6 +55,23 @@ async def test_spoken_edition_none_when_llm_raises():
         patch.object(runtime, "_llm_call", AsyncMock(side_effect=RuntimeError("CLI down"))),
     ):
         out = await delivery._generate_spoken_briefing("<p>A sentence.</p>", "Title", "local", "m")
+    assert out is None
+
+
+async def test_spoken_edition_none_when_narration_regresses():
+    """A stub rewrite (content lost) is rejected → caller reads the body verbatim."""
+    body_lines = [
+        "Ma journée du lundi.",
+        "Réunion à 9 h avec l'équipe produit.",
+        "Le climat se réchauffe, selon Le Monde.",
+    ] * 6
+    with (
+        patch("memory_core.tts_local.html_to_segments", return_value=body_lines),
+        patch.object(runtime, "_llm_call", AsyncMock(return_value="Bonjour, voici ta journée.")),
+    ):
+        out = await delivery._generate_spoken_briefing(
+            "<p>...</p>", "Ma journée du lundi", "local", "m"
+        )
     assert out is None
 
 

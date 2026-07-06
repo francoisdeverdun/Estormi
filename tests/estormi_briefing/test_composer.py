@@ -72,6 +72,20 @@ def test_registry_ids_kinds_and_today_marking():
     assert by_kind["W"][0]["label"] == "WhatsApp · Marius"
 
 
+def test_registry_marks_cancelled_calendar_event_inline():
+    """E5: a cancelled calendar event carries an inline "(ANNULÉ …)" note into
+    its registry text so the plan, the writers and the lede all see it and it
+    never anchors the day. A live event is untouched."""
+    rows = _rows()
+    rows["calendar"][0]["cancelled"] = True  # "Revue archi"
+    reg = build_registry(rows, _DATE)
+    a_entries = [e for e in reg if e["kind"] == "A"]
+    cancelled = next(e for e in a_entries if "Revue archi" in e["text"])
+    assert "ANNULÉ" in cancelled["text"]
+    live = next(e for e in a_entries if "Comité data" in e["text"])
+    assert "ANNULÉ" not in live["text"]
+
+
 def test_plan_schema_locks_ids_to_enum():
     reg = build_registry(_rows(), _DATE)
     schema = plan_schema([e["id"] for e in reg])
@@ -122,6 +136,37 @@ def test_filter_around_drops_past_today_calendar_and_duplicates():
     ]
     kept = filter_around(plan_around, by_id, _DATE)
     assert [k["id"] for k in kept] == ["C1"]
+
+
+def test_filter_around_dedups_same_chunk_under_two_anchor_prefixes():
+    """The SAME chunk can orbit twice — once as a thread row "(fil: …)" and once
+    as a linked chunk "(lié à: …)". The prefix is stripped before keying so the
+    two prefixed copies collapse to one row (mirrors B4's HTML seen-set)."""
+    body = "Les copains: canapé chez la maman de Camille samedi midi"
+    by_id = {
+        "T1": {
+            "id": "T1",
+            "kind": "T",
+            "label": "whatsapp",
+            "when": "",
+            "date": "",
+            "text": f"(fil:Camille) {body}",
+        },
+        "L1": {
+            "id": "L1",
+            "kind": "L",
+            "label": "whatsapp",
+            "when": "",
+            "date": "",
+            "text": f"(lié à: dîner) {body}",
+        },
+    }
+    kept = filter_around(
+        [{"id": "T1", "stake": "à préparer"}, {"id": "L1", "stake": "à préparer"}],
+        by_id,
+        _DATE,
+    )
+    assert [k["id"] for k in kept] == ["T1"]  # the L1 copy is a duplicate
 
 
 def test_filter_around_replaces_stake_with_invented_deadline():

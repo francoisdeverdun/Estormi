@@ -82,6 +82,34 @@ def test_drops_source_attribution_lines() -> None:
     assert "NateBJones" not in joined
 
 
+def test_multi_source_bullet_keeps_the_sentence_body() -> None:
+    # A multi-source inline bullet ("<body>. Source A · Source B · <year>") used
+    # to match the attribution filter as a whole and vanish from the audio. Only
+    # the trailing provenance tail should be dropped; the sentence must survive.
+    html = (
+        "<li>La BCE relève ses taux et les marchés corrigent nettement. "
+        "Le Monde · Reuters · 19 juin 2026</li>"
+    )
+    segs = tts_local.html_to_segments(html)
+    joined = " ".join(segs)
+    assert "les marchés corrigent nettement" in joined
+    assert "Reuters" not in joined
+    assert "2026" not in joined
+
+
+def test_interpunct_list_narrates_with_commas() -> None:
+    # The "·" separator used to be blanked with the other ornaments, running the
+    # items together ("climat énergie transport"). It now becomes a comma pause.
+    html = "<p>Trois sujets à suivre : climat · énergie · transport de demain.</p>"
+    joined = " ".join(tts_local.html_to_segments(html))
+    assert "climat, énergie, transport" in joined
+    assert " · " not in joined and "·" not in joined
+
+    # Same on the already-clean spoken-edition path.
+    joined_text = " ".join(tts_local.text_to_segments("climat · énergie · transport"))
+    assert "climat, énergie, transport" in joined_text
+
+
 def test_adds_terminal_punctuation() -> None:
     segs = tts_local.html_to_segments("<h1>Briefing du jour</h1>")
     assert segs == ["Briefing du jour."]

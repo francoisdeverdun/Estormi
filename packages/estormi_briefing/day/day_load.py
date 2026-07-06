@@ -45,6 +45,12 @@ _SNIPPET_LIMIT = 140
 # doesn't push a workout into it.
 _MIN_WORKOUT_SLOT_MINUTES = 45
 
+# A best slot this long is the whole working window (08:00–21:00 = 780 min) with
+# nothing on the calendar: the day is open. Naming an "08:00–21:00" créneau then
+# reads as a real constraint and leaks those bounds into the composer's citable
+# figures, so the fact becomes "journée libre" and the specific times stay out.
+_FREE_DAY_SLOT_MINUTES = 600
+
 _BAND_WORDS_FR = {"green": "vert", "yellow": "jaune", "red": "rouge"}
 
 
@@ -210,7 +216,16 @@ def _build_facts(
         facts.append((f"sommeil {label}" if fr else f"sleep {label}") + suffix)
 
     slot = features.get("best_slot")
-    if slot:
+    if slot and slot["minutes"] >= _FREE_DAY_SLOT_MINUTES:
+        # The whole day is open: don't name a créneau (its bounds would read as a
+        # real constraint and enter the composer's citable figures). A workout
+        # steer goes wherever the user wants.
+        facts.append(
+            "journée libre, aucune contrainte d'horaire — place ta séance quand tu veux"
+            if fr
+            else "free day, no schedule constraint — fit your workout whenever you like"
+        )
+    elif slot:
         facts.append(
             f"créneau libre {slot['start']}–{slot['end']} ({slot['minutes']} min)"
             if fr

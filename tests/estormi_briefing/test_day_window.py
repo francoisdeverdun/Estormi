@@ -68,6 +68,57 @@ def test_format_action_defaults_for_reminder_row():
     assert action["tentative"] is False
 
 
+def _reminder_row(title: str, date_val, date_ts: str):
+    """A minimal reminder row (calendar-only columns omitted, like the real
+    reminders query) for the expiry tests below."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    return conn.execute(
+        "SELECT 'reminders' AS source, ? AS title, ? AS date, ? AS date_ts, "
+        "'me' AS group_type, NULL AS chat_id_raw",
+        (title, date_val, date_ts),
+    ).fetchone()
+
+
+def test_format_action_expired_flag_ages_out_timed_reminder():
+    """B3 (2.4): a *timed* reminder (raw ``date`` carries a time) whose slot
+    passed more than the 24h grace before the briefing day-start is ``expired`` —
+    build_daily_note drops it from the overdue list + count so a stale backlog
+    stops padding every morning."""
+    day_start = "2026-05-02T22:00:00+00:00"  # Paris midnight for 2026-05-03
+    # Timed reminder due three days before day-start.
+    row = _reminder_row(
+        "Appeler le plombier", "2026-04-29T14:00:00+00:00", "2026-04-29T14:00:00+00:00"
+    )
+    action = _format_action(row, after_utc=day_start)
+    assert action["overdue"] is True
+    assert action["expired"] is True
+
+
+def test_format_action_expired_flag_respects_grace_window():
+    """B3 (2.4): a timed reminder inside the 24h grace before day-start is
+    overdue but NOT yet expired (covers 'I meant to do it last night')."""
+    day_start = "2026-05-02T22:00:00+00:00"
+    # Due ~12h before day-start — overdue, but within the 24h grace.
+    row = _reminder_row("Envoyer le mail", "2026-05-02T10:00:00+00:00", "2026-05-02T10:00:00+00:00")
+    action = _format_action(row, after_utc=day_start)
+    assert action["overdue"] is True
+    assert action["expired"] is False
+
+
+def test_format_action_date_only_chore_never_expires():
+    """B3 (2.4): a date-only chore (bare ``YYYY-MM-DD``) keeps rolling forward
+    until done — it never carries the ``expired`` flag no matter how old."""
+    day_start = "2026-05-02T22:00:00+00:00"
+    # Bare-date reminder from a week ago — overdue, but date-only → not expired.
+    row = _reminder_row("Renouveler le passeport", "2026-04-25", "2026-04-25T00:00:00+00:00")
+    action = _format_action(row, after_utc=day_start)
+    assert action["overdue"] is True
+    assert action["expired"] is False
+
+
 async def test_today_located_events_surfaces_work_location():
     """One MCP fetch yields located events (location parsed from the chunk text)
     plus the day's working location — now a structured chunk field, not a text
@@ -102,6 +153,40 @@ async def test_today_located_events_surfaces_work_location():
     assert work_location == "FR-DigitalFactory (office)"
     assert [e["title"] for e in events] == ["Sprint review"]
     assert events[0]["location"] == "Paris HQ"
+
+
+async def test_today_located_events_keeps_untagged_calendar_drops_noise():
+    """E3: the schedule strip is coverage, not the actionable to-do list. An
+    untagged ('unknown') calendar event must reach the strip (an 8-meeting day
+    on an untagged calendar shipped an empty 'Ma journée'); only a muted
+    ('noise') calendar is dropped."""
+
+    async def _fake(payload, timeout=12.0):
+        return [
+            {
+                "source": "gcal",
+                "title": "Réunion projet",
+                "group_type": "unknown",
+                "date_ts": "2026-02-01T14:00:00+00:00",
+                "end_date_ts": "2026-02-01T15:00:00+00:00",
+                "text": "Réunion projet",
+            },
+            {
+                "source": "gcal",
+                "title": "Anniversaire lointain",
+                "group_type": "noise",
+                "date_ts": "2026-02-01T09:00:00+00:00",
+                "end_date_ts": "2026-02-01T09:30:00+00:00",
+                "text": "Anniversaire lointain",
+            },
+        ]
+
+    with patch.object(day_vision, "_fetch_around_mcp", AsyncMock(side_effect=_fake)):
+        events, _ = await day_vision._fetch_today_located_events(date(2026, 2, 1))
+
+    titles = [e["title"] for e in events]
+    assert "Réunion projet" in titles  # untagged event kept
+    assert "Anniversaire lointain" not in titles  # muted 'noise' still dropped
 
 
 async def test_day_context_uses_fetch_around_personal_window():
@@ -709,3 +794,120 @@ async def test_repair_voice_keeps_original_when_src_marker_dropped():
     with patch.object(day_vision.runtime, "_llm_call", AsyncMock(return_value=mangled)):
         out = await day_vision._repair_voice(_FORMAL_VISION, "local", "m")
     assert out == _FORMAL_VISION
+
+
+# ── cancellation guard (E5) ───────────────────────────────────────────────────
+
+
+def test_flag_cancelled_events_tags_on_cue_and_distinctive_token():
+    """A cancellation cue naming the event's distinctive title token flags it
+    cancelled — the deterministic signal that keeps a cancelled event off the
+    pivot."""
+    calendar = [{"title": "Festival Solidays", "group_type": "me"}]
+    scan = [{"title": "", "text": "Le festival Solidays est annulé cette année"}]
+    n = day_vision._flag_cancelled_events(calendar, scan)
+    assert n == 1
+    assert calendar[0]["cancelled"] is True
+
+
+def test_flag_cancelled_events_ignores_generic_cue_without_title_token():
+    """A bare 'annulé' in unrelated chatter must NOT mislabel a real event — the
+    exact distinctive-token gate is what makes the guard non-destructive."""
+    calendar = [{"title": "Festival Solidays", "group_type": "me"}]
+    scan = [{"title": "", "text": "le rendez-vous dentiste est annulé"}]
+    n = day_vision._flag_cancelled_events(calendar, scan)
+    assert n == 0
+    assert "cancelled" not in calendar[0]
+
+
+def test_flag_cancelled_events_handles_reporte_and_english_cues():
+    calendar = [
+        {"title": "Réunion Cogefrem", "group_type": "work"},
+        {"title": "Sprint review", "group_type": "work"},
+    ]
+    scan = [
+        {"title": "", "text": "la réunion Cogefrem est reportée"},
+        {"title": "", "text": "the sprint review is cancelled"},
+    ]
+    day_vision._flag_cancelled_events(calendar, scan)
+    assert calendar[0]["cancelled"] is True
+    assert calendar[1]["cancelled"] is True
+
+
+def test_flag_cancelled_events_skips_event_without_distinctive_token():
+    """An event whose title is all generic vocabulary yields no anchor, so it is
+    left live rather than matched on the cue alone."""
+    calendar = [{"title": "point", "group_type": "work"}]  # too generic to anchor
+    scan = [{"title": "", "text": "le point est annulé"}]
+    n = day_vision._flag_cancelled_events(calendar, scan)
+    assert n == 0
+    assert "cancelled" not in calendar[0]
+
+
+# ── promotional-mail correlation guard (P1) ───────────────────────────────────
+
+
+def test_is_promotional_chunk_fires_on_bulk_and_legal_markers():
+    """A mail carrying an unsubscribe footer, a web-version link, "newsletter" or
+    the finance disclaimer boilerplate is a mass mailing — never an anchor."""
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "text": "Nos offres crypto. Pour ne plus recevoir, se désinscrire ici."}
+    )
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "title": "Newsletter Meria", "text": "Voir la version en ligne."}
+    )
+    assert day_vision._is_promotional_chunk(
+        {"source": "mail", "text": "Aucun élément ne constitue un conseil en investissement."}
+    )
+
+
+def test_is_promotional_chunk_spares_personal_mail_and_non_mail():
+    """A genuine one-to-one mail with no bulk marker stays anchorable, and the
+    guard is gated on source=='mail' so a WhatsApp line never trips it."""
+    # A personal mail that even MENTIONS "crypto" but carries no bulk marker.
+    assert not day_vision._is_promotional_chunk(
+        {
+            "source": "mail",
+            "text": "Salut, on se voit demain pour parler de ton portefeuille crypto ?",
+        }
+    )
+    # The exact bulk marker in a non-mail source must not fire (source gate).
+    assert not day_vision._is_promotional_chunk(
+        {"source": "whatsapp", "text": "tu peux te désinscrire de la newsletter du club"}
+    )
+
+
+async def test_correlate_event_excludes_promotional_mail_from_anchoring():
+    """The Meria-promo × "crypto" bug: a bulk marketing mail must not anchor a
+    correlation, even when it clears retrieval. A genuine personal mail on the
+    same subject still links."""
+
+    async def _fake(payload, timeout=10.0):
+        if "min_score" in payload:  # dense arm
+            return [
+                {
+                    "id": "promo",
+                    "text": "Meria — profitez de nos frais réduits sur la crypto. "
+                    "Pour ne plus recevoir nos emails, se désinscrire ici.",
+                    "source": "mail",
+                    "date": "2026-05-30T08:00:00+00:00",
+                },
+                {
+                    "id": "personal",
+                    "text": "Je t'ai envoyé le virement pour l'achat crypto qu'on avait convenu.",
+                    "source": "mail",
+                    "date": "2026-05-30T09:00:00+00:00",
+                },
+            ]
+        return []
+
+    with patch.object(day_vision, "_search_mcp_memory", AsyncMock(side_effect=_fake)):
+        out = await day_vision._correlate_event(
+            {"title": "Point crypto", "when_label": "2026-06-01 (Monday)"},
+            day=date(2026, 6, 1),
+        )
+
+    assert out is not None
+    ids = [c["id"] for c in out["chunks"]]
+    assert "promo" not in ids  # bulk mail barred from anchoring
+    assert ids == ["personal"]  # the genuine personal mail still links
