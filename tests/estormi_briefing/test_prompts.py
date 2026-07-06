@@ -832,7 +832,36 @@ async def test_fact_critique_defaults_on_llm_failure():
         raise RuntimeError("down")
 
     out = await fact_critique_briefing("draft", _fact_rows(), "2026-06-11", _boom)
-    assert out == {"issues": [], "approved": True}
+    # Never-blocking contract: still approved with no issues so the pipeline
+    # ships. But the failure is no longer silent — `critic_error` is set so the
+    # run can surface an advisory "critic unavailable" (E6 observability).
+    assert out["issues"] == []
+    assert out["approved"] is True
+    assert out["critic_error"] == "down"
+
+
+async def test_fact_critique_flags_error_on_unparseable_reply():
+    from estormi_briefing.compose.prompts import fact_critique_briefing
+
+    async def _garbage(prompt: str) -> str:
+        return "not json at all"
+
+    out = await fact_critique_briefing("draft", _fact_rows(), "2026-06-11", _garbage)
+    # An unparseable reply is a silent-outage path too: approved (non-blocking)
+    # but with `critic_error` set so it can't pass as a checked briefing.
+    assert out["issues"] == []
+    assert out["approved"] is True
+    assert out["critic_error"] == "unparseable"
+
+
+async def test_fact_critique_no_error_key_on_success():
+    from estormi_briefing.compose.prompts import fact_critique_briefing
+
+    async def _ok(prompt: str) -> str:
+        return '{"issues": [], "approved": true}'
+
+    out = await fact_critique_briefing("draft", _fact_rows(), "2026-06-11", _ok)
+    assert "critic_error" not in out
 
 
 async def test_fact_critique_skips_empty_inputs():
@@ -844,7 +873,68 @@ async def test_fact_critique_skips_empty_inputs():
     called.assert_not_awaited()
 
 
-def test_fact_pack_drops_low_density_blocks_first():
+async def test_critique_flags_error_on_llm_failure():
+    """Structural critic: an outage sets `critic_error` (still non-blocking) so
+    the run can surface an advisory instead of a silent approval (E6)."""
+    from estormi_briefing.compose.prompts import critique_briefing
+
+    async def _boom(prompt: str) -> str:
+        raise RuntimeError("down")
+
+    out = await critique_briefing("draft", [], "", _boom)
+    assert out["issues"] == []
+    assert out["approved"] is True
+    assert out["critic_error"] == "down"
+
+
+async def test_critique_flags_error_on_unparseable_reply():
+    from estormi_briefing.compose.prompts import critique_briefing
+
+    async def _garbage(prompt: str) -> str:
+        return "definitely not json"
+
+    out = await critique_briefing("draft", [], "", _garbage)
+    assert out["approved"] is True
+    assert out["critic_error"] == "unparseable"
+
+
+async def test_critique_no_error_key_on_success():
+    from estormi_briefing.compose.prompts import critique_briefing
+
+    async def _ok(prompt: str) -> str:
+        return '{"issues": [], "approved": true}'
+
+    out = await critique_briefing("draft", [], "", _ok)
+    assert "critic_error" not in out
+
+
+def test_fact_pack_keeps_wa_blocks_when_dropping_lower_value_suffices():
+    """WhatsApp evidence is the highest value to the fact-critic (it disproves a
+    stale/cancelled claim), so it is dropped LAST. When trimming links + ctx
+    alone brings the pack under budget, the wa block survives."""
+    from estormi_briefing.compose.prompts import FACT_PACK_MAX_CHARS, _fact_pack_rows
+
+    rows = _fact_rows()
+    # A single small wa block; the overflow lives in ctx (capped at 6 rows but
+    # each large), which is dropped before wa. Rows this big push the capped
+    # pack past budget on ctx alone.
+    rows["wa_blocks"] = [{"label": "camille", "texts": ["annulé demain"]}]
+    rows["ctx_rows"] = [
+        {"source": "mail", "when_label": "", "title": "t", "text": "y" * 2000} for _ in range(6)
+    ]
+    assert _fact_pack_rows({**rows, "ctx_rows": []})  # sanity: fits without ctx
+    packed = _fact_pack_rows(rows)
+    total = sum(len(str(v)) for v in packed.values())
+    assert total <= FACT_PACK_MAX_CHARS
+    assert packed["ctx_rows"] == []  # dropped before wa
+    assert packed["wa_blocks"]  # kept — dropped last, not first
+    assert packed["calendar"]  # never dropped
+    assert packed["threads"]  # never dropped
+
+
+def test_fact_pack_drops_wa_blocks_last_when_wa_is_the_overflow():
+    """When the WhatsApp block itself is the whole overflow, it is still dropped
+    (to stay in budget) — but only after links and ctx have already gone."""
     from estormi_briefing.compose.prompts import FACT_PACK_MAX_CHARS, _fact_pack_rows
 
     rows = _fact_rows()
@@ -855,9 +945,27 @@ def test_fact_pack_drops_low_density_blocks_first():
     packed = _fact_pack_rows(rows)
     total = sum(len(str(v)) for v in packed.values())
     assert total <= FACT_PACK_MAX_CHARS
-    assert packed["wa_blocks"] == []  # dropped first
+    assert packed["wa_blocks"] == []  # dropped last, but the overflow forced it
     assert packed["calendar"]  # never dropped
     assert packed["threads"]  # never dropped
+
+
+def test_fact_pack_surfaces_cancelled_flag_into_calendar_title():
+    """A cancelled calendar event's flag rides into the title the fact-critic
+    reads, backing the CANCELLATION RULE with the deterministic signal."""
+    from estormi_briefing.compose.prompts import _fact_pack_rows
+
+    rows = _fact_rows()
+    rows["calendar"] = [
+        {"when": "10:00", "title": "Solidays", "group_type": "me", "cancelled": True},
+        {"when": "14:00", "title": "Standup", "group_type": "work"},
+    ]
+    packed = _fact_pack_rows(rows)
+    titles = [a["title"] for a in packed["calendar"]]
+    assert "Solidays [ANNULÉ]" in titles
+    assert "Standup" in titles  # untouched
+    # The source rows are not mutated (shallow copy only).
+    assert rows["calendar"][0]["title"] == "Solidays"
 
 
 def test_format_critic_feedback_renders_evidence():

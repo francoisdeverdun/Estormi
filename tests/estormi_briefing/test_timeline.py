@@ -123,6 +123,21 @@ def test_timeline_html_unparseable_times_use_all_day_label():
     assert html.index("Conference") < html.index("Call")
 
 
+def test_timeline_html_all_day_flag_uses_all_day_label():
+    """A calendar all-day entry parses to a midnight datetime, so the `all_day`
+    flag — not a None start — is what earns it the "All day" label and the top
+    pin above the timed rows."""
+    events = [
+        {"title": "Congé", "start": _dt(0), "end": _dt(0), "all_day": True},
+        _ev("Call", _dt(9), _dt(10)),
+    ]
+    html = timeline_html(events, [], LABELS)
+    assert '<b style="color:#C8A96B">All day</b> · Congé' in html
+    assert "00:00" not in html  # the midnight timestamp must not surface
+    # The all-day row pins to the top, before any timed row.
+    assert html.index("Congé") < html.index("Call")
+
+
 def test_timeline_html_skips_blank_titles():
     events = [_ev("", _dt(9), _dt(10)), _ev("   ", _dt(10), _dt(11)), _ev("Real", _dt(11), _dt(12))]
     html = timeline_html(events, [], LABELS)
@@ -178,3 +193,53 @@ def test_fmt_minutes_spellings():
     assert _fmt_minutes(65) == "1 h 05"
     assert _fmt_minutes(120) == "2 h"
     assert _fmt_minutes(210) == "3 h 30"
+
+
+# ── _render_timeline (run_briefing wiring: located_events → strip HTML) ────────
+
+
+def _located(title: str, start: datetime, end: datetime, *, all_day: bool = False) -> dict:
+    """A located_events row as day_vision writes it (ISO strings + all_day)."""
+    return {
+        "title": title,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "all_day": all_day,
+    }
+
+
+def test_render_timeline_threads_all_day_flag_and_localised_label():
+    """E2: the all_day flag rides from the located_events rows into the renderer,
+    which labels it in the run's language and pins it above the timed rows."""
+    from estormi_briefing.run_briefing import _render_timeline
+
+    rows = {
+        "located_events": [
+            _located("Congé", _dt(0), _dt(0), all_day=True),
+            _located("Call", _dt(9), _dt(10)),
+        ]
+    }
+    html = _render_timeline(rows, "fr")
+    assert "toute la journée" in html  # localised all-day label
+    assert "00:00" not in html  # the midnight timestamp never surfaces
+    assert html.index("Congé") < html.index("Call")  # all-day pinned to the top
+    assert "09:00–10:00" in html
+
+
+def test_render_timeline_empty_without_located_events():
+    from estormi_briefing.run_briefing import _render_timeline
+
+    assert _render_timeline({}, "fr") == ""
+    assert _render_timeline({"located_events": []}, "fr") == ""
+
+
+def test_render_timeline_renders_untagged_calendar_event():
+    """E3-adjacent: an event that reached located_events (any non-noise calendar,
+    including an untagged one) renders on the strip — the strip is coverage, not
+    the actionable list, so it must not come back empty on a real meeting day."""
+    from estormi_briefing.run_briefing import _render_timeline
+
+    rows = {"located_events": [_located("Réunion projet", _dt(14), _dt(15))]}
+    html = _render_timeline(rows, "fr")
+    assert "Réunion projet" in html
+    assert "14:00–15:00" in html

@@ -64,6 +64,8 @@ Data:
 {% endfor %}
 </today_reminders>
 {% endif %}
+{% if overdue or today_rem %}NOTE — a deterministic "À ne pas oublier"/"Don't forget" line, written in code, already lists these reminders under the briefing. Do NOT re-list them in your prose. Mention a reminder in MY DAY only when you add real synthesis — it ties into today's thread, a deadline, or a message — never as a bare "n'oublie pas de …" echo of the list.
+{% endif %}
 {% if deadline_lines %}DEADLINES — verbatim sentences extracted in code from the data below. Copy these dates EXACTLY as written; NEVER move a deadline to another date or attach it to another subject:
 <deadlines>
 {% for d in deadline_lines -%}
@@ -153,6 +155,10 @@ don't dramatise. No hype, no exclamation. Everything in
   NOT re-state it as a thesis sentence to open MY DAY ("Today is all about
   family", "the dominant thread is…"); open MY DAY with the single most concrete,
   consequential fact, stated directly.
+- ADDRESS — if the output language distinguishes formal/informal address
+  (tu/vous, du/Sie), address the user informally throughout{% if language == 'French' %} — en
+  français : tutoie l'utilisateur (« tu as », « ton entretien »), jamais de
+  vouvoiement{% endif %}.
 
 STRUCTURE — produce the briefing in three labelled parts, in this exact order.
 This is a BRIEF, not a report: stop once the useful things are said.
@@ -198,6 +204,13 @@ This is a BRIEF, not a report: stop once the useful things are said.
 DISCIPLINE
 - Never infer that an event or message concerns the user just because it
   appears in the data.
+- A newsletter, marketing email, promotional blast or automated bulk mail is
+  NOT personal advice addressed to the user. Never upgrade it into a tailored
+  recommendation — a Meria crypto promo is not "a steer on your Bitcoin
+  allocation", a broker's market note is not "advice to rebalance your
+  portfolio". Report such a mail, if at all, as the impersonal offer it is
+  ("Meria sent a Bitcoin promotion"), and never present its pitch as a decision
+  the user faces today.
 - Calendar ownership — the [type] tag on each event marks WHOSE calendar it
   is on, and you MUST attribute it accordingly:
     • me / work — the user's own commitments; actionable, the user's
@@ -324,10 +337,6 @@ against each before answering:
   the facts and what is at stake, like a chief of staff — not a coach. Do NOT
   invent recommendations (prepare questions, block 30 minutes, delegate to
   someone): say what is due and why it matters; the user decides what to do.
-- If the output language distinguishes formal/informal address (tu/vous,
-  du/Sie), address the user informally{% if language == 'French' %} — en
-  français : tutoie l'utilisateur (« tu as », « ton entretien »), jamais de
-  vouvoiement{% endif %}.
 
 OUTPUT SKELETON — reproduce this SHAPE exactly. The <angle-bracket> parts are
 placeholders for your own prose; every fact in them must come from the data

@@ -198,8 +198,11 @@ _BLOCK_TAGS = {"p", "div", "h1", "h2", "h3", "h4", "li", "section", "br", "tr", 
 # the subtree permanently "open".
 _VOID_TAGS = {"br", "hr", "img", "input", "meta", "link", "wbr", "col", "source"}
 # Emoji / ornament glyphs the briefing uses for section headers and follow-up
-# markers — stripped so the narrator doesn't vocalise or stumble on them.
-_ORNAMENTS = "✦✧•·↩↪→▸◆◇★☆❧"
+# markers — stripped so the narrator doesn't vocalise or stumble on them. The
+# "·" interpunct is NOT here: it separates list items ("climat · énergie ·
+# transport"), so blanking it run-runs the words together — it is turned into a
+# comma pause by :func:`_normalise_interpuncts` instead.
+_ORNAMENTS = "✦✧•↩↪→▸◆◇★☆❧"
 _EMOJI_RE = re.compile(
     "["
     "\U0001f300-\U0001faff"  # symbols & pictographs, emoji, supplemental
@@ -220,7 +223,29 @@ _SKIP_LINE_RE = re.compile(
     r"^(sources?\s*[:]|composé par|composed by|estormi\s*[—–-]\s)",
     flags=re.IGNORECASE,
 )
-_ATTRIBUTION_RE = re.compile(r"·.*·.*\b\d{4}\b\s*$")
+# A trailing source attribution: an interpunct-separated author/handle run ending
+# in a year ("Author · “handle” · 5 juin 2026"). Anchored to the line END and
+# barred from crossing a sentence terminator ([^.!?]), so a multi-source bullet
+# ("… les marchés corrigent nettement. Le Monde · Reuters · 19 juin 2026") only
+# loses the tail, not the sentence body. A pure-attribution line strips to empty
+# and is then dropped whole; a real sentence with no attribution never matches.
+_ATTRIBUTION_TAIL_RE = re.compile(r"\s*[^.!?]*?·[^.!?]*·[^.!?]*\b\d{4}\b\s*$")
+
+
+def _strip_attribution_tail(line: str) -> str:
+    """Remove a trailing source-attribution tail, keeping any sentence body."""
+    return _ATTRIBUTION_TAIL_RE.sub("", line).strip()
+
+
+def _normalise_interpuncts(line: str) -> str:
+    """Turn "·" list separators into comma pauses so items don't run together.
+
+    Runs AFTER the attribution filter (which needs the raw "·" to spot a
+    provenance tail). A spaced "a · b" becomes "a, b"; a bare "a·b" gets a
+    comma too, and any doubled comma/space from the substitution is collapsed.
+    """
+    line = line.replace(" · ", ", ").replace("·", ", ")
+    return re.sub(r"\s+", " ", line.replace(" ,", ",")).strip()
 
 
 class _Stripper(HTMLParser):
@@ -283,14 +308,19 @@ def html_to_segments(body: str) -> list[str]:
     lines: list[str] = []
     for block in raw.split("\n"):
         # Collapse whitespace but keep the "·" separators so the attribution
-        # filter ("Author · handle · 5 juin 2026") can fire BEFORE ornaments
-        # are stripped — afterwards the dots are gone and the line looks like
-        # prose.
+        # filter ("Author · handle · 5 juin 2026") and the interpunct-to-comma
+        # pass below can fire BEFORE ornaments are stripped.
         line = re.sub(r"\s+", " ", block).strip()
         if not line or len(line) < 2:
             continue
-        if _SKIP_LINE_RE.match(line) or _ATTRIBUTION_RE.search(line):
+        if _SKIP_LINE_RE.match(line):
             continue
+        # Strip only a trailing source-attribution tail, keeping any sentence
+        # body before it — a pure-attribution line strips to empty and drops.
+        line = _strip_attribution_tail(line)
+        if not line:
+            continue
+        line = _normalise_interpuncts(line)
         line = line.translate({ord(c): " " for c in _ORNAMENTS})
         line = re.sub(r"\s+", " ", line).strip()
         if line:
@@ -310,7 +340,7 @@ def text_to_segments(text: str) -> list[str]:
     text = text.translate({ord(c): " " for c in _ORNAMENTS})
     lines: list[str] = []
     for block in re.split(r"\n+", text):
-        line = re.sub(r"\s+", " ", block).strip()
+        line = _normalise_interpuncts(re.sub(r"\s+", " ", block).strip())
         if line and len(line) >= 2:
             lines.append(line)
     return _pack_segments(lines)

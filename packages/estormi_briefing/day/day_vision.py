@@ -35,11 +35,16 @@ from estormi_briefing.compose.prompts import (
     extract_day_facts,
 )
 from estormi_briefing.compose.timeline import free_slots
-from estormi_briefing.day.day import LOCAL_TZ, _day_anchor, _local_when_label, _parse_iso_datetime
+from estormi_briefing.day.day import (
+    LOCAL_TZ,
+    _day_anchor,
+    _is_all_day_raw,
+    _local_when_label,
+    _parse_iso_datetime,
+)
 from estormi_briefing.day.day_context import (
     _CALENDAR_SOURCES,
     _CORR_MAX_EVENTS,
-    _DAY_CALENDAR_GROUP_TYPES,
     _fetch_day_context_chunks,
     _fetch_health_chunks,
     _fetch_recent_whatsapp,
@@ -113,6 +118,40 @@ def _strip_accents(text: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c)
     )
+
+
+# Bulk/marketing markers that unmask a mass mailing: an unsubscribe/list-cleanup
+# footer, a "voir en ligne" web-version link, an explicit "newsletter", or the
+# legal disclaimer boilerplate promotional finance mail carries. A bulk mail is
+# broadcast to a list, so anchoring a personal reminder to it and recasting it as
+# tailored advice (the Meria-promo × "crypto" bug) is a fabricated correlation.
+# Narrow, distinctive tokens only — accent-stripped + lowercase, matched against
+# accent-stripped text so "désinscrire"/"desinscrire" both hit.
+_PROMOTIONAL_MARKERS = (
+    "se desinscrire",
+    "desabonner",
+    "unsubscribe",
+    "ne plus recevoir",
+    "list-unsubscribe",
+    "voir la version en ligne",
+    "newsletter",
+    "aucun element ne constitue un conseil",
+)
+
+
+def _is_promotional_chunk(chunk: dict) -> bool:
+    """True for a bulk/marketing mail chunk that must never anchor a correlation.
+
+    Gated on ``source == 'mail'`` and an EXACT distinctive bulk/legal marker
+    (unsubscribe footer, web-version link, "newsletter", or the finance
+    disclaimer boilerplate) so a genuine one-to-one personal mail never trips.
+    Advisory-only: a promotional chunk is merely barred from *anchoring* a
+    correlation — it is never deleted and can still surface elsewhere.
+    """
+    if (chunk.get("source") or "") != "mail":
+        return False
+    text = _strip_accents(f"{chunk.get('title') or ''} {chunk.get('text') or ''}")
+    return any(m in text for m in _PROMOTIONAL_MARKERS)
 
 
 def _is_stale_correlation(chunk: dict, day: date) -> bool:
@@ -308,6 +347,45 @@ def _distinctive_tokens(text: str) -> set[str]:
     return out
 
 
+# A cancellation/postponement cue in a message or article. Word-bounded so
+# "annulé" doesn't fire on a substring; covers the French forms plus the
+# English one that leaks in from world/world-adjacent sources.
+_CANCEL_CUE_RE = re.compile(
+    r"\b(annul[ée]?e?s?|annulation|report[ée]?e?s?|cancell?ed|postpon(?:ed|ement))\b",
+    re.IGNORECASE,
+)
+
+
+def _flag_cancelled_events(calendar: list[dict], scan_chunks: list[dict]) -> int:
+    """Advisory cancellation guard: tag a calendar event ``cancelled=True`` when
+    a recent personal/world chunk carries a cancellation cue AND one of the
+    event's *distinctive* title tokens.
+
+    Deterministic and never destructive: the event is only flagged, not dropped
+    — ``build_registry`` turns the flag into an inline "(annulé …)" note so the
+    plan, the writers and the fact-critic all see it, and a cancelled event no
+    longer reads as a live pivot. The exact distinctive-token gate is what keeps
+    a generic "annulé" in unrelated chatter from mislabelling a real event.
+    Returns the number of events flagged (for logging).
+    """
+    flagged = 0
+    for event in calendar:
+        title = str(event.get("title") or "")
+        tokens = _distinctive_tokens(title)
+        if not tokens:
+            continue  # no distinctive anchor → can't match safely, leave it live
+        for chunk in scan_chunks:
+            text = f"{chunk.get('title') or ''} {chunk.get('text') or ''}"
+            if not _CANCEL_CUE_RE.search(text):
+                continue
+            chunk_words = {w[:6] for w in _CORR_TOKEN_RE.findall(text.lower())}
+            if any(t[:6] in chunk_words for t in tokens):
+                event["cancelled"] = True
+                flagged += 1
+                break
+    return flagged
+
+
 def _lexical_link(anchor_tokens: set[str], text: str) -> bool:
     """True when ``text`` shares any of the anchor's distinctive vocabulary.
 
@@ -401,6 +479,18 @@ async def _correlate_event(event: dict, after: str = "", day: date | None = None
                 event.get("title"),
             )
             continue
+        # A bulk marketing mail must never ANCHOR a correlation: it is broadcast
+        # to a list, so tying it to a personal reminder and recasting it as
+        # tailored advice (the Meria-promo × "crypto" bug) is fabricated. Barred
+        # from anchoring only — the chunk is not deleted and can surface
+        # elsewhere.
+        if _is_promotional_chunk(chunk):
+            log.info(
+                "correlation: dropped promotional mail chunk %s for event %r",
+                cid,
+                event.get("title"),
+            )
+            continue
         chunk["when_label"] = when
         related.append(chunk)
         if len(related) >= _CORR_PER_EVENT:
@@ -460,7 +550,13 @@ async def _fetch_today_located_events(day: date) -> tuple[list[dict], str]:
     events: list[dict] = []
     work_location = ""
     for chunk in chunks:
-        if (chunk.get("group_type") or "unknown") not in _DAY_CALENDAR_GROUP_TYPES:
+        # The schedule strip is deterministic coverage, not the actionable
+        # to-do list: keep every real calendar event and drop only 'noise'
+        # (muted calendars). The tighter _DAY_CALENDAR_GROUP_TYPES set governs
+        # the actionable "My day" list and the prose-context filters — using it
+        # here silently emptied the strip on a day whose meetings sat on
+        # untagged ('unknown') calendars.
+        if (chunk.get("group_type") or "unknown") == "noise":
             continue
         work_location = work_location or (chunk.get("working_location") or "")
         start = _parse_iso_datetime(chunk.get("date_ts"))
@@ -474,6 +570,10 @@ async def _fetch_today_located_events(day: date) -> tuple[list[dict], str]:
                 "title": (chunk.get("title") or "").strip(),
                 "start": start,
                 "end": end,
+                # An all-day entry still parses to a midnight datetime, so the
+                # renderer can't tell it apart on the timestamps alone: carry the
+                # raw-date all-day signal explicitly.
+                "all_day": bool(_is_all_day_raw(chunk.get("date"))),
                 "location": _parse_event_location(chunk.get("text") or ""),
             }
         )
@@ -696,6 +796,19 @@ async def _generate_day_vision(
         else enrichments_data.get("work_location", "")
     )
 
+    # Cancellation guard (advisory, deterministic): scan the recent personal +
+    # world window for a cancellation cue co-occurring with an event's own
+    # distinctive title token, and tag the matching calendar events. The flag
+    # rides into build_registry as an inline "(annulé …)" note so a cancelled
+    # event stops reading as a live pivot and the fact-critic sees the cue too.
+    scan_chunks: list[dict] = [*context_chunks, *wa_chunks]
+    scan_chunks += [c for corr in correlations for c in corr.get("chunks") or []]
+    if news_digest:
+        scan_chunks.append({"title": "", "text": news_digest})
+    n_cancelled = _flag_cancelled_events(calendar, scan_chunks)
+    if n_cancelled:
+        log.info("cancellation guard: flagged %d event(s) as cancelled", n_cancelled)
+
     rows = _assemble_vision_rows(
         date_str,
         calendar,
@@ -743,6 +856,7 @@ async def _generate_day_vision(
             "title": e["title"],
             "start": e["start"].isoformat(),
             "end": e["end"].isoformat(),
+            "all_day": bool(e.get("all_day")),
         }
         for e in located_events
     ]

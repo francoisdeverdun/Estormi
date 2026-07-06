@@ -1213,8 +1213,12 @@ def format_critic_feedback(issues: list[dict]) -> str:
 
 # Fact-critic data budget. The vision rows re-rendered for verification must
 # leave room for the draft + instructions inside the local window; when the
-# packed blocks overflow, drop the least-dense ones first (wa → ctx → links)
-# — calendar, reminders and threads always survive.
+# packed blocks overflow, drop the lowest-VALUE-to-the-critic blocks first
+# (links → ctx → wa) — calendar, reminders and threads always survive, and the
+# WhatsApp block goes LAST because it is the evidence that most often
+# contradicts a draft (a message saying an event was cancelled/moved is exactly
+# what the critic needs to catch a stale claim). Dropping it first blinded the
+# critic to the one source that could disprove the writer.
 FACT_PACK_MAX_CHARS = 10_000
 _FACT_CAPS = {"threads": 4, "thread_rows": 4, "links": 6, "link_rows": 2, "ctx": 6, "wa_msgs": 2}
 
@@ -1233,8 +1237,16 @@ def _fact_pack_rows(rows: dict) -> dict:
         {**b, "texts": [t[:300] for t in (b.get("texts") or [])[-_FACT_CAPS["wa_msgs"] :]]}
         for b in rows.get("wa_blocks") or []
     ]
+    # Surface the cancellation flag to the fact-critic: the guard tagged these
+    # events cancelled, but the template only renders the title, so fold the
+    # marker into the title the critic reads. It backs the CANCELLATION RULE in
+    # briefing_fact_critic.j2 with the deterministic signal.
+    calendar = [
+        ({**a, "title": f"{a.get('title') or ''} [ANNULÉ]"} if a.get("cancelled") else a)
+        for a in rows.get("calendar") or []
+    ]
     packed = {
-        "calendar": rows.get("calendar") or [],
+        "calendar": calendar,
         "overdue": rows.get("overdue") or [],
         "today_rem": rows.get("today_rem") or [],
         "threads": threads,
@@ -1246,7 +1258,7 @@ def _fact_pack_rows(rows: dict) -> dict:
     def _size(p: dict) -> int:
         return sum(len(str(v)) for v in p.values())
 
-    for droppable in ("wa_blocks", "ctx_rows", "links"):
+    for droppable in ("links", "ctx_rows", "wa_blocks"):
         if _size(packed) <= FACT_PACK_MAX_CHARS:
             break
         packed[droppable] = []
@@ -1283,7 +1295,14 @@ async def fact_critique_briefing(
             issues = payload.get("issues")
             result["issues"] = issues if isinstance(issues, list) else []
             result["approved"] = bool(payload.get("approved", not result["issues"]))
+        else:
+            # Empty/unparseable reply — the fact critic ran but said nothing
+            # usable. Flag it so an outage is visible rather than passing as an
+            # unchecked "approved".
+            result["critic_error"] = "unparseable"
+            log.warning("fact_critique_briefing: reply not a dict — treating as unavailable")
     except Exception as exc:  # noqa: BLE001 — non-blocking by contract
+        result["critic_error"] = str(exc)[:120] or "exception"
         log.warning("fact_critique_briefing failed, using defaults: %s", exc)
     return result
 
@@ -1325,6 +1344,14 @@ async def critique_briefing(
             issues = payload.get("issues")
             result["issues"] = issues if isinstance(issues, list) else []
             result["approved"] = bool(payload.get("approved", not result["issues"]))
+        else:
+            # Empty/unparseable critic reply (outage, truncation) — the critic
+            # ran but said nothing usable. Record it so the run can surface an
+            # advisory "critic unavailable" issue instead of silently reporting
+            # an approved briefing that was never actually checked.
+            result["critic_error"] = "unparseable"
+            log.warning("critique_briefing: critic reply not a dict — treating as unavailable")
     except Exception as exc:  # noqa: BLE001 — non-blocking by contract
+        result["critic_error"] = str(exc)[:120] or "exception"
         log.warning("critique_briefing failed, using defaults: %s", exc)
     return result
