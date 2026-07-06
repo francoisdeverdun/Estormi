@@ -398,7 +398,6 @@ fn main() {
                     .build()
                     .unwrap_or_else(|_| reqwest::Client::new());
                 let started = std::time::Instant::now();
-                let mut slow_notified = false;
                 loop {
                     tokio::time::sleep(Duration::from_millis(300)).await;
                     let ok = http_nav
@@ -414,13 +413,22 @@ fn main() {
                         break;
                     }
                     // Past a warm start's window the spinner alone reads as
-                    // "frozen". Drop a one-shot status line onto the splash so a
-                    // slow cold start (especially an external library waking up)
-                    // reads as progress. Targets an element the bundled splash
-                    // renders empty; the eval no-ops until that React tree has
-                    // mounted it, and the loop retries every 300ms regardless.
-                    if !slow_notified && started.elapsed().as_secs() >= SLOW_BOOT_NOTICE_SECS {
-                        slow_notified = true;
+                    // "frozen". Drop a status line onto the splash so a slow cold
+                    // start (especially an external library waking up) reads as
+                    // progress. `win.eval` can't report back whether the target
+                    // element existed yet, so we can't fire once and trust it: on
+                    // a slow start the splash React tree may not have mounted
+                    // `#estormi-boot-status` by the notice mark, and a one-shot
+                    // would be lost forever. Instead re-issue the injection every
+                    // 300ms across the window [SLOW_BOOT_NOTICE_SECS,
+                    // HEALTH_INTERVAL_SECS]; the JS is idempotent (fills only
+                    // while the element is still empty), so it no-ops until the
+                    // element mounts, lands on the first tick after it does, and
+                    // then stops changing anything. We cap the retries at
+                    // HEALTH_INTERVAL_SECS — past that the redirect is imminent
+                    // and re-injecting is pointless.
+                    let elapsed = started.elapsed().as_secs();
+                    if (SLOW_BOOT_NOTICE_SECS..HEALTH_INTERVAL_SECS).contains(&elapsed) {
                         if let Some(win) = app_handle_nav.get_webview_window(MAIN_WINDOW_LABEL) {
                             let msg = if data_dir_external {
                                 "Waking the library on its external disk — this can take a moment…"
@@ -428,7 +436,7 @@ fn main() {
                                 "Waking the memory engine — the first start of the day is slower…"
                             };
                             let _ = win.eval(format!(
-                                "var e=document.getElementById('estormi-boot-status');if(e){{e.textContent='{msg}';}}"
+                                "var e=document.getElementById('estormi-boot-status');if(e&&!e.textContent){{e.textContent='{msg}';}}"
                             ));
                         }
                     }
