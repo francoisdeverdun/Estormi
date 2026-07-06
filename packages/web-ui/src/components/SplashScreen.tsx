@@ -54,6 +54,28 @@ export function SplashScreen() {
         }}
       />
 
+      {/*
+        Boot status — empty on a warm start; the native macOS shell fills it via
+        `win.eval` once a slow cold start passes the warm-start window (see
+        apps/estormi-macos/src/main.rs), so the user reads progress rather than a
+        frozen spinner. Reserves its line height so filling it doesn't shift the
+        layout. Pre-redirect (tauri://) only — the http:// SPA boot is fast and
+        leaves this blank.
+      */}
+      <div
+        id="estormi-boot-status"
+        aria-live="polite"
+        style={{
+          minHeight: '1.1em',
+          maxWidth: '80vw',
+          textAlign: 'center',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          letterSpacing: '0.04em',
+          color: 'rgba(200, 169, 107, 0.72)',
+        }}
+      />
+
       <style>{`
         @keyframes estormi-splash-spin {
           from { transform: rotate(0deg); }
