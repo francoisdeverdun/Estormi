@@ -30,11 +30,12 @@ anyhow = "1"
 # its transport/http adapters — is tightly version-coupled: the transport's
 # TransportFactory impl is tied to a specific wacore. Keep these on one minor
 # (0.5) and bump them together. Dependabot moving only the transport to 0.6
-# (#29) split the tree across two wacore versions and broke the
+# (#29, #58) split the tree across two wacore versions and broke the
 # TransportFactory trait bound; a 0.6 move needs the whole family + an API
-# migration (Event variants / type changes), tracked separately.
+# migration (Event variants / type changes), tracked separately. Pin the
+# transport to 0.5.0 so an unattended minor bump can't re-split the tree.
 whatsapp-rust = { version = "0.5.0", features = ["sqlite-storage"] }
-whatsapp-rust-tokio-transport = "0.6.0"
+whatsapp-rust-tokio-transport = "=0.5.0"
 whatsapp-rust-ureq-http-client = "0.5.0"
 wacore = "0.5"
 axum = { version = "0.7", features = ["json"] }
