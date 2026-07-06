@@ -45,7 +45,7 @@ pdfplumber>=0.11.9
 google-api-python-client>=2.149.0
 google-auth-oauthlib>=1.4.0
 feedparser>=6.0.0
-jinja2>=3.1.0
+jinja2>=3.1.6
 # graphifyy provides tree-sitter-based structural extraction for the `code`
 # connector (extract_python / extract_js / …) and ships the grammars as wheels.
 # Bundle pins (including the full tree-sitter-* grammar set) live in
