@@ -298,9 +298,9 @@ diskcache==5.6.3 \
 et_xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
-fastapi==0.136.3 \
-    --hash=sha256:3d2a69bdf04b7e9f3afa292c3bc7a98816bbfafa10bc9b45f3f3700d2f761620 \
-    --hash=sha256:e487fae93ad408e6f47641ee4dfe389864fd7bec92e547ea8498fc13f43e83ab
+fastapi==0.139.0 \
+    --hash=sha256:99ab7b2d92223c76d6cf10757ab3f89d45b38267fc20b2a136cf02f6beac3145 \
+    --hash=sha256:cf15e1e9e667ddb0ad63811e60bd11390d1aac838ca4a7a23f421807b2308189
 fastembed==0.8.0 \
     --hash=sha256:40bee672657574a1009e35ec50030a55f2b426842cb011845379817641bbbbd0 \
     --hash=sha256:75966edfa8b006ee78514c726bd7f6a50721dadc89305279052be9db72fd53e8
@@ -1836,9 +1836,9 @@ yt-dlp==2026.6.9 \
 # into the dev .venv (Python 3.12) on 2026-05-26; re-pin if the next packaged
 # release picks a newer graphifyy. The tree-sitter-* grammars are the language
 # coverage — adding/removing here changes which file types the graph can parse.
-graphifyy==0.8.36 \
-    --hash=sha256:c5c78aa804a307f52722e5d0984a3a476899cc709b71375dec6539fba23f6ba4 \
-    --hash=sha256:e08e8dfe2fca584b0cfc3027e731b9774651343ada809cb369ced1a28b2a7b6f
+graphifyy==0.9.8 \
+    --hash=sha256:5a76f25f4dfe630941a58fce6d9b5ec558055aa6098c722f7ffc38644eee4f69 \
+    --hash=sha256:9fde12dffdea380a5b3e5e6080f2a4e22e7198dd0a2b5edc116d433673d1bade
 tree-sitter==0.25.2 \
     --hash=sha256:0628671f0de69bb279558ef6b640bcfc97864fe0026d840f872728a86cd6b6cd \
     --hash=sha256:0c8b6682cac77e37cfe5cf7ec388844957f48b7bd8d6321d0ca2d852994e10d5 \
