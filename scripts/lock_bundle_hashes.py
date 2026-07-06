@@ -30,8 +30,12 @@ from pathlib import Path
 
 BUNDLE = Path(__file__).resolve().parent.parent / "requirements" / "requirements-bundle.txt"
 # A bare ``name==version`` pin at the start of a line (not a continuation / hash
-# / comment). Names may carry extras, but the bundle uses none today.
-_PIN_RE = re.compile(r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s#\\]+)\s*$")
+# / comment). The name may carry an extras group (``mistral-common[audio]``);
+# it is captured so the pin re-renders WITH its extras — dropping it here would
+# leave a dangling ``\`` (the pin's hashes get stripped but never re-emitted).
+_PIN_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?==(?P<version>[^\s#\\]+)\s*$"
+)
 
 
 def _pypi_sha256s(name: str, version: str) -> list[str]:
@@ -45,8 +49,8 @@ def _pypi_sha256s(name: str, version: str) -> list[str]:
     return digests
 
 
-def _render(name: str, version: str, hashes: list[str]) -> str:
-    lines = [f"{name}=={version} \\"]
+def _render(name: str, version: str, hashes: list[str], extras: str = "") -> str:
+    lines = [f"{name}{extras}=={version} \\"]
     lines += [f"    --hash=sha256:{h} \\" for h in hashes[:-1]]
     lines.append(f"    --hash=sha256:{hashes[-1]}")
     return "\n".join(lines)
@@ -74,7 +78,7 @@ def regenerate(text: str) -> str:
             out.append(raw)
             continue
         hashes = _pypi_sha256s(m["name"], m["version"])
-        out.append(_render(m["name"], m["version"], hashes))
+        out.append(_render(m["name"], m["version"], hashes, m["extras"] or ""))
     return "\n".join(out) + "\n"
 
 

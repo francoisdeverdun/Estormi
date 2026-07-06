@@ -1,5 +1,5 @@
 # Lint, typecheck, dependency locks/audit, OpenAPI codegen, data reset/clean.
-.PHONY: tokens tokens-check lint lint-frontend lint-rust typecheck typecheck-frontend check lock audit-deps openapi openapi-check reset clean clean-graph
+.PHONY: tokens tokens-check lint lint-frontend lint-rust typecheck typecheck-frontend check lock relock check-requirements audit-deps openapi openapi-check reset clean clean-graph
 
 ## ── Dev ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,14 @@ check: lint typecheck lint-frontend typecheck-frontend lint-rust test test-front
 
 lock: ## Recompile requirements/requirements.lock from the dev + test floors (run after editing either requirements file)
 	uv pip compile packages/estormi_server/requirements.txt tests/requirements-test.txt --universal --generate-hashes -o requirements/requirements.lock
+
+relock: lock ## Regenerate the lock AND re-derive the bundle to match, then verify (run after any dependency bump — e.g. to fix a Dependabot group PR)
+	python scripts/sync_bundle_pins.py
+	python scripts/lock_bundle_hashes.py
+	python scripts/check_requirements_consistency.py
+
+check-requirements: ## Verify requirements.lock is consistent with the floors + bundle and installs on py3.12 (mirrors the CI guard)
+	python scripts/check_requirements_consistency.py
 
 audit-deps: ## Audit the SHIPPED bundle pins (requirements/requirements-bundle.txt) for known CVEs
 	@# CI's security workflow audits the loose contributor floors

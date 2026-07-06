@@ -1,0 +1,60 @@
+name: Requirements consistency
+
+# Fast guard for the recurring Dependabot failure mode: a group PR bumps the
+# floors or the shipped bundle (requirements-bundle.txt) but never regenerates
+# the resolved lock (requirements.lock), so the two diverge — and sometimes the
+# bundle pins a version the resolver rejects on py3.12 (e.g. numpy past
+# mistral-common's <2.4 cap). The full pytest+coverage job DOES catch this, but
+# the real cause is buried; this job surfaces it immediately, at the
+# requirements layer, with the one-line fix (`make relock`).
+#
+# It only inspects the committed files (no push, no PAT — the repo regenerates
+# derived artifacts locally by convention; see test.yml). Dependabot's own PRs
+# run it too, so a stale-lock group PR goes red here first with a clear message.
+on:
+  pull_request:
+    paths:
+      - 'requirements/requirements-bundle.txt'
+      - 'requirements/requirements.lock'
+      - 'packages/estormi_server/requirements.txt'
+      - 'tests/requirements-test.txt'
+      - 'scripts/check_requirements_consistency.py'
+      - 'scripts/sync_bundle_pins.py'
+      - 'scripts/lock_bundle_hashes.py'
+      - '.github/workflows/requirements-consistency.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'requirements/requirements-bundle.txt'
+      - 'requirements/requirements.lock'
+      - 'packages/estormi_server/requirements.txt'
+      - 'tests/requirements-test.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  consistency:
+    name: Requirements consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install packaging
+        run: pip install packaging
+
+      - name: Check lock ↔ floors ↔ bundle consistency (+ py3.12 install)
+        run: python scripts/check_requirements_consistency.py
