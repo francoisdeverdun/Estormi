@@ -219,6 +219,29 @@ async def test_search_memory_happy_path_returns_scored_hits(client, mock_qdrant)
 # ───────────────────────────────────────────────────────────────────────
 
 
+def _all_route_paths(routes) -> set[str]:
+    """Every path string reachable from ``routes``, descending into nested routers.
+
+    Starlette 1.x no longer flattens ``include_router()`` sub-routes into
+    ``app.routes``: each call adds one opaque ``_IncludedRouter`` wrapper (no
+    ``.path``) whose sub-routes hang off ``.original_router.routes``; static
+    mounts nest theirs under ``.routes``. Walk both so the check sees the
+    endpoints regardless of how the router tree is represented — a shallow
+    ``{r.path for r in app.routes}`` misses everything included this way."""
+    paths: set[str] = set()
+    for route in routes:
+        path = getattr(route, "path", None)
+        if path is not None:
+            paths.add(path)
+        sub = getattr(route, "routes", None)
+        if sub is None:
+            original = getattr(route, "original_router", None)
+            sub = getattr(original, "routes", None) if original is not None else None
+        if sub:
+            paths |= _all_route_paths(sub)
+    return paths
+
+
 async def test_engine_events_route_is_registered():
     """SSE streams don't close cleanly inside httpx's ASGITransport — the
     generator keeps yielding heartbeats and the test hangs. Asserting the
@@ -227,8 +250,7 @@ async def test_engine_events_route_is_registered():
     and the ``subscribe()`` unit coverage in ``server.events``."""
     from estormi_server.main import app  # noqa: PLC0415
 
-    route_paths = {getattr(r, "path", None) for r in app.routes}
-    assert "/api/events" in route_paths
+    assert "/api/events" in _all_route_paths(app.routes)
 
 
 # ───────────────────────────────────────────────────────────────────────
