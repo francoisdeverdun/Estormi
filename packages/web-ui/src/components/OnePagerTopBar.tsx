@@ -16,6 +16,8 @@ import { useEffect, useState } from 'react'
 import { EstormiLogoMark } from '@estormi/ui-kit'
 import { EngineRoomPopover } from './EngineRoomPopover'
 import { LiveDot } from './engineroom/LiveDot'
+import { useSnapshotState } from '../state/snapshotCache'
+import type { Overview } from '../api/overview'
 import {
   ENGINES,
   humanAgo,
@@ -25,6 +27,7 @@ import {
 
 export function OnePagerTopBar() {
   const sys = useSystemStatus()
+  const [overview] = useSnapshotState<Overview | null>('overview', null)
   const [now, setNow] = useState(() => new Date())
   const [elapsed, setElapsed] = useState(0)
   const [engineRoomOpen, setEngineRoomOpen] = useState(false)
@@ -131,6 +134,19 @@ export function OnePagerTopBar() {
           >
             ars memoriae
           </div>
+          {overview?.version && (
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 8,
+                letterSpacing: '0.06em',
+                color: 'var(--ink-dim)',
+              }}
+              title="Running build — exact git tag on an official release, else the short commit SHA"
+            >
+              {overview.version}
+            </div>
+          )}
         </div>
       </div>
 
