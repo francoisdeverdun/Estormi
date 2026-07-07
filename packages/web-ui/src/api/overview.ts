@@ -31,6 +31,11 @@ export interface OverviewSources {
 }
 
 export interface Overview {
+  /** Build identifier shown under the masthead lockup — the exact git tag on
+   *  an official release (e.g. `v0.0.2`), otherwise the short commit SHA
+   *  (e.g. `d6eefbe`). Written by `make build-version` into
+   *  `build_version.txt`; may be absent on a stale cached snapshot. */
+  version?: string
   data_dir: string
   settings: Record<string, string>
   storage: OverviewStorage

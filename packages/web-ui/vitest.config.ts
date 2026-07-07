@@ -33,6 +33,7 @@ export default defineConfig({
         'src/components/ModelDownloadList.tsx',
         'src/components/SourceManageModal.tsx',
         'src/components/EngineRoomPopover.tsx',
+        'src/components/OnePagerTopBar.tsx',
         'src/components/sourcepanels/WhatsAppPanel.tsx',
         'src/components/briefing/BriefingAtelier.tsx',
         'src/sections/BriefingModal.tsx',

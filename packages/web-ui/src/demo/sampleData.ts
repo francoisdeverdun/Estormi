@@ -8,10 +8,12 @@
 import type { Overview } from '../api/overview'
 import type { PipelineData } from '../api/pipeline'
 import type { BriefingSummary, Briefing } from '../api/knowledge'
+import type { DistillStatus } from '../api/distill'
 
 // ── Overview (settings/overview) ────────────────────────────────────────────
 
 export const demoOverview: Overview = {
+  version: 'v0.0.2',
   data_dir: '/Users/demo/Estormi-data',
   settings: {
     briefing_language: 'fr',
@@ -184,11 +186,26 @@ export const demoSettings: Record<string, string> = {
 
 // ── Distill status ──────────────────────────────────────────────────────────
 
-export const demoDistillStatus = {
-  workspace: null,
-  tooling: { installed: false },
-  references: { total: 0, models: {} },
-  last_run: null,
+export const demoDistillStatus: DistillStatus = {
+  status: { phase: 'done', lastTrainedAt: '2026-06-30T03:12:00Z' },
+  references: {
+    days: [],
+    count: 18,
+    vaultCount: 18,
+    minBriefings: 5,
+    models: { 'user-edited': 4 },
+  },
+  tooling: {
+    python: 'python3.12',
+    mlx_lm: '0.19.0',
+    quantize: 'ok',
+    convert: 'ok',
+    ready: true,
+  },
+  installed: true,
+  installedFile: 'quill-2026-06-30.gguf',
+  workspace: { dir: '/Users/demo/Estormi-data/distill', freeGb: 240, needGb: 20 },
+  running: [],
 }
 
 // ── Model catalog ───────────────────────────────────────────────────────────
