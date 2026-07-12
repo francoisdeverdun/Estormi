@@ -28,10 +28,36 @@ updates:
       - dependencies
       - python
     groups:
+      # ONE grouped PR for every Python bump across both directories (the
+      # contributor floors AND the pinned bundle) — floor bumps must NOT spin
+      # off their own PRs (they did: pdfplumber/python-pptx/structlog/llama-cpp
+      # each got a solo PR). The pattern is a catch-all and update-types is left
+      # unrestricted so a major floor bump (e.g. structlog 24→26) folds into the
+      # same group instead of splitting off — the whole Python surface still
+      # lands as a single reviewable PR that the `Requirements consistency`
+      # guard + `make relock` reconcile in one go. (npm/cargo/actions below keep
+      # majors separate; pip is grouped whole because its lock is regenerated
+      # atomically, not reviewed pin-by-pin.)
       pip-minor-patch:
-        update-types:
-          - minor
-          - patch
+        patterns:
+          - "*"
+    # Structurally unsatisfiable on the py3.12 bundle target — a bump here can
+    # never resolve, so Dependabot would re-raise a doomed PR every week. Ignore
+    # them until their blocker clears (then drop the entry and bump manually).
+    ignore:
+      # numpy > 2.3 is capped by mistral-common (`numpy<2.4` for python<=3.12).
+      - dependency-name: "numpy"
+        versions: [">=2.4"]
+      # pydantic pins pydantic-core exactly; it must move with pydantic, never alone.
+      - dependency-name: "pydantic-core"
+      # transformers + tokenizers are version-coupled; bump them together, by hand.
+      - dependency-name: "transformers"
+      - dependency-name: "tokenizers"
+      # tree-sitter 0.26 changed the grammar API the tree-sitter-* packages pin below it.
+      - dependency-name: "tree-sitter"
+        versions: [">=0.26"]
+      # pdfplumber 0.11.10 conflicts with its pinned transitive deps.
+      - dependency-name: "pdfplumber"
 
   - package-ecosystem: npm
     directory: "/"
