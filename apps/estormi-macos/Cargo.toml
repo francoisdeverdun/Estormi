@@ -35,7 +35,7 @@ anyhow = "1"
 # migration (Event variants / type changes), tracked separately. Pin the
 # transport to 0.5.0 so an unattended minor bump can't re-split the tree.
 whatsapp-rust = { version = "0.5.0", features = ["sqlite-storage"] }
-whatsapp-rust-tokio-transport = "=0.5.0"
+whatsapp-rust-tokio-transport = "=0.6.0"
 whatsapp-rust-ureq-http-client = "0.5.0"
 wacore = "0.5"
 axum = { version = "0.7", features = ["json"] }
