@@ -34,10 +34,9 @@ mistral-common[audio]>=1.11.0
 keyring>=25.0.0
 # APNs JWT (ES256) signing for the iOS "new briefing" push — see
 # estormi_ingestion/shared/delivery/apns_push.py. Bundle pins the exact version.
-# Security floor: cryptography < 48.0.1 carries GHSA-537c-gmf6-5ccf. Bounded
-# <49 because the 49.x major is unvalidated against the ES256 APNs signing path
-# (apns_push.py) — bump deliberately after testing, like APScheduler<4.
-cryptography>=49.0.0,<50
+# Security floor: cryptography < 48.0.1 carries GHSA-537c-gmf6-5ccf.
+cryptography>=49.0.0
+
 openpyxl>=3.1.0
 python-pptx>=1.0.0
 python-docx>=1.2.0
