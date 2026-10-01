@@ -50,7 +50,7 @@ jobs:
       # openapi-typescript) and the SPA-shell smoke tests (need a built bundle),
       # so install Node + pnpm and build the SPA before pytest — mirroring the
       # split QA jobs that already do this.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -132,7 +132,7 @@ jobs:
       # as `make bundle` does locally via its `frontend-build` target. Without this
       # the build fails on the missing frontendDist directory on a fresh checkout.
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
