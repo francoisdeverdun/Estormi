@@ -25,12 +25,18 @@ catalog:
 #   - esbuild <0.25.0  — dev-server request SSRF (GHSA-67mh-4wv8-2f99); vite 8
 #     already resolves >=0.25, so this is now a defensive floor.
 #   - ws <8.21.0       — memory-exhaustion DoS from tiny fragments (high).
-#   - js-yaml <4.2.0   — quadratic-complexity DoS in merge-key handling.
+#   - js-yaml <4.3.2   — quadratic-complexity DoS in merge-key handling, plus
+#     GHSA-52cp-r559-cp3m / -5p4m-2wfm-xmqj / -2883-xcg3-v3hh (fixed in 4.3.2).
+#   - brace-expansion  — CPU DoS in expansion (GHSA-q2hr-2g5m-vwhr and five
+#     earlier advisories); one floor per major line pulled in by minimatch 3/5/10.
 #   - @babel/core <7.29.6 — arbitrary file read via sourceMappingURL comment.
 overrides:
   esbuild: ">=0.25.0"
   "ws@<8.21.0": "^8.21.0"
-  "js-yaml@<4.2.0": "^4.2.0"
+  "js-yaml@<4.3.2": "^4.3.2"
+  "brace-expansion@<1.1.21": "^1.1.21"
+  "brace-expansion@>=2.0.0 <2.1.7": "^2.1.7"
+  "brace-expansion@>=4.0.0 <5.0.12": "^5.0.12"
   "@babel/core@<7.29.6": ">=7.29.6 <8"
 allowBuilds:
   esbuild: true
