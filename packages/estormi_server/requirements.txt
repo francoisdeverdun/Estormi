@@ -6,7 +6,7 @@ fastapi>=0.141.1
 # GHSA-jp82-jpqv-5vv3. Pinned explicitly (it is otherwise transitive via
 # fastapi) so neither a dev install nor the lock can resolve a vulnerable build.
 starlette>=1.7.0
-uvicorn[standard]>=0.53.0
+uvicorn[standard]>=0.54.0
 httpx>=0.28.1
 qdrant-client[local]>=1.19.1
 fastembed>=0.8.1
@@ -51,4 +51,4 @@ jinja2>=3.1.6
 # connector (extract_python / extract_js / …) and ships the grammars as wheels.
 # Bundle pins (including the full tree-sitter-* grammar set) live in
 # requirements-bundle.txt.
-graphifyy>=0.9.67
+graphifyy>=0.9.71
