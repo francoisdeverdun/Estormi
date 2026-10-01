@@ -72,6 +72,12 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # TypeScript 7 (the native rewrite) is outside typescript-eslint's peer
+      # range (<6.1.0), so `eslint src` fails on it. Drop once typescript-eslint
+      # supports 7.
+      - dependency-name: "typescript"
+        versions: [">=7"]
 
   - package-ecosystem: cargo
     directory: "/apps/estormi-macos"
