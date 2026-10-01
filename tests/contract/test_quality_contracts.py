@@ -171,7 +171,8 @@ class TestPipelineContracts:
 
         for required in [
             "actions/checkout@v6",
-            "actions/setup-python@v6",
+            "actions/setup-python@v7",
+            "actions/setup-node@v7",
             "actions/upload-artifact@v7",
             "actions/cache@v6",
         ]:
@@ -180,6 +181,7 @@ class TestPipelineContracts:
         for deprecated in [
             "actions/checkout@v4",
             "actions/setup-python@v5",
+            "actions/setup-node@v4",
             "actions/upload-artifact@v4",
             "actions/cache@v4",
             "actions/cache@v5",

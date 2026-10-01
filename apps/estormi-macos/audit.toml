@@ -40,10 +40,4 @@ ignore = [
     # rand custom-logger unsoundness — Estormi installs no custom logger,
     # so the affected code path is unreachable.
     "RUSTSEC-2026-0097", # rand
-    # diesel 2.3.8 unsoundness — diesel is pulled in transitively by Tauri 2;
-    # Estormi does not use diesel directly and the unsound code path requires
-    # constructing a custom Queryable impl, which we do not do.
-    # Review deadline: 2026-09-01 — revisit if Tauri bumps diesel or a fix
-    # release lands (diesel >= 2.4.0 expected to resolve this).
-    "RUSTSEC-2026-0172", # diesel
 ]
