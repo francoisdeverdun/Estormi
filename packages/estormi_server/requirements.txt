@@ -43,6 +43,10 @@ openpyxl>=3.1.5
 python-pptx>=1.0.2
 python-docx>=1.2.0
 pdfplumber>=0.11.9
+# Security floor: pillow < 13.0.0 carries PYSEC-2026-4329..4342 and a batch of
+# GHSAs (pip-audit). Pinned explicitly (it is otherwise transitive via fastembed,
+# mistral-common, pdfplumber, python-pptx) so the lock cannot resolve 12.x.
+pillow>=13.0.0
 google-api-python-client>=2.200.0
 google-auth-oauthlib>=1.4.1
 feedparser>=6.0.14
